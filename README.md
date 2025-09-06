@@ -8,7 +8,7 @@ It provides a robust alternative to traditional multisig, timelock, or DAO-only 
 
 DRS is designed for protocols that need:
 - Fast recovery from lost or compromised deployer/admin keys.
-- Guardian-based approval flow (e.g., 5-of-7).
+- Guardian-based approval flow (e.g., 5-of-7 or 4-of-7).
 - Automatic compromise detection (warnings at 4/7, lock at 7/7).
 - Reset and recovery mechanisms controlled by valid owners or last honest guardians.
 - Upgrade-safe and pluggable security, usable with any Solidity contract.
@@ -36,5 +36,30 @@ DRS is designed for protocols that need:
 
 Clone the repo:
 ```bash
-git clone https://github.com/enigmaapos/drs.git
-cd drs
+git clone https://github.com/enigmaapos/drs-framework.git
+cd drs-framework
+
+Install dependencies (if using Hardhat/Foundry):
+
+npm install
+# or
+forge install
+
+Compile contracts:
+
+npx hardhat compile
+# or
+forge build
+
+Run tests:
+
+npx hardhat test
+# or
+forge test
+
+
+---
+
+📜 License
+
+This project is licensed under the MIT License.
