@@ -1,0 +1,32 @@
+catalyst-drs/
+│
+├── contracts/                 # Solidity smart contracts
+│   ├── CatalystNFTStaking.sol # Main Catalyst contract with GCSS + AGC
+│   ├── GuardianLib.sol        # Shared guardian council logic
+│   ├── GovernanceLib.sol      # Governance logic
+│   ├── StakingLib.sol         # NFT staking logic
+│   ├── ConfigRegistryLib.sol  # Config + params registry
+│   ├── FeeManagerLib.sol      # Fee split + deployer accounting
+│   └── TreasuryLib.sol        # Treasury accounting
+│
+├── docs/                      # Documentation
+│   ├── README.md              # Project intro & quickstart
+│   ├── WHITEPAPER.md          # Full whitepaper on DRS + Catalyst integration
+│   ├── GCSS.md                # Guardian Council Security System details
+│   ├── AGC.md                 # Admin Guardian Council details
+│   └── DRS.md                 # General Decentralized Recovery System framework
+│
+├── examples/                  # Example scripts or integrations
+│   ├── deploy.js              # Example Hardhat deploy script
+│   └── interact.js            # Example dApp interaction
+│
+├── tests/                     # Testing suite
+│   ├── staking.test.js
+│   ├── governance.test.js
+│   ├── guardian.test.js
+│   └── recovery.test.js
+│
+├── .gitignore
+├── hardhat.config.js          # Hardhat config (or foundry.toml if Foundry)
+├── package.json
+└── LICENSE
