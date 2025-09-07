@@ -1,1 +1,97 @@
+🟢 Original Guardian Council (GCSS/AGC)
 
+One batch only
+
+You configure 7 guardians for Deployer Council (GCSS) or Admin Council (AGC).
+
+Threshold: 5-of-7 approvals required to replace a role or execute recovery.
+
+
+Recovery flow
+
+Guardians sign/approve → once quorum is met, the action is executed.
+
+Optional: last-honest guardian reset mechanic if compromise is suspected (6-of-7 vs 7-of-7).
+
+
+DAO interaction
+
+The DAO (or admin) can replace the entire council, but that’s a manual governance transaction.
+
+There is no built-in standby team.
+
+
+Pros
+✅ Simpler, fewer moving parts.
+✅ Easier to audit (lower attack surface).
+✅ Lighter bytecode footprint.
+
+Cons
+❌ If compromise happens, replacing guardians depends on DAO speed (may take hours/days).
+❌ During a takeover, if DAO is slow → higher risk.
+
+
+
+---
+
+🔵 Batch Guardian Council (updated design)
+
+Two batches always maintained
+
+Active Council (Batch A) = currently controlling.
+
+Standby Council (Batch B) = pre-approved replacement team, waiting on-chain.
+
+
+Recovery flow
+
+If Batch A is compromised:
+
+5-of-7 of Active can still trigger a switch, OR
+
+Owner/Lock role can trigger immediately, OR
+
+Last-honest guardian can trigger within a short time window.
+
+
+Switch → Standby becomes Active automatically.
+
+DAO then refills the Standby with fresh guardians for the next cycle.
+
+
+DAO interaction
+
+DAO only needs to refill the Standby batch after a switch.
+
+The “promotion” to Active is instant, on-chain, without waiting for DAO.
+
+
+Pros
+✅ Much faster recovery (you don’t wait for DAO votes).
+✅ Always a fresh team ready to take over if needed.
+✅ Can rotate guardians proactively by simply promoting Standby.
+
+Cons
+❌ More complex → larger contract size & higher audit cost.
+❌ Requires DAO discipline: Standby must always be kept fresh after a switch.
+❌ Attackers might try to corrupt both batches ahead of time.
+
+
+
+---
+
+⚖️ In short
+
+Original GCSS/AGC = single batch, slower but simpler (requires DAO to act if compromised).
+
+Batch Guardian Council = two-layer system with hot standby, faster failover but more complex.
+
+
+
+---
+
+👉 So it depends on what you want to use for:
+
+If simplicity + minimal bytecode is the priority → stick with original GCSS/AGC.
+
+If faster reaction & continuous rotation is more important → go with batch council.
