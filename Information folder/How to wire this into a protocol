@@ -1,0 +1,45 @@
+How to wire this into a protocol (e.g., Catalyst)
+
+1. Deploy BatchGuardianCouncil with:
+
+dao = your DAO/multisig safe
+
+target = the protocol contract that exposes:
+
+recoverDeployer(address) (implements IRecoverDeployer)
+
+recoverAdmin(address) (implements IRecoverAdmin)
+
+
+batch1 & batch2 = arrays of 7 guardian addresses each
+
+
+
+2. In your protocol (Catalyst or any), implement:
+
+
+
+function recoverDeployer(address newDeployer) external onlyCouncil { /* set deployer addr */ }
+function recoverAdmin(address newAdmin) external onlyCouncil { /* grant DEFAULT_ADMIN_ROLE */ }
+
+…and restrict them with a onlyCouncil modifier pointing to this council’s address.
+
+3. Governance flow:
+
+Guardians (Batch-1) propose/approve/execute recoveries normally (5/7).
+
+If 7/7 approvals appear (suspicious), council auto-locks.
+
+While locked, only DAO can:
+
+Activate standby
+
+Reseed batches
+
+Clear the lock/warning after safety is restored
+
+
+
+
+
+This matches the goal: attackers can’t reseed themselves as future guardians; only the DAO can. The community remains the permanent source of truth.
