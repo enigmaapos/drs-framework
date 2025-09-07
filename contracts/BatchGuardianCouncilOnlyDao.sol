@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title BatchGuardianCouncil
+ * @title BatchGuardianCouncil Only DAO 
  * @notice Decentralized Recovery System (DRS) with dual-batch guardian councils.
  *         - Batch-1: active guardians (7)
  *         - Batch-2: standby guardians (7) — activated automatically on lock or by DAO
