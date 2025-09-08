@@ -1,0 +1,21 @@
+How to integrate with your protocol
+
+Your main contract (e.g., Catalyst) just implements the callback:
+
+function onDRSRecover(bytes32 role, address /*oldAccount*/, address newAccount) external {
+    require(msg.sender == address(council), "only council");
+    if (role == keccak256("DEPLOYER")) {
+        deployerAddress = newAccount; // or update fee receiver
+    } else if (role == keccak256("ADMIN")) {
+        _grantRole(DEFAULT_ADMIN_ROLE, newAccount);
+        // optionally revoke compromised admin in same tx
+    } else {
+        // custom roles if needed
+    }
+}
+
+Point TARGET to your contract.
+
+Set ROLE to keccak256("DEPLOYER") or keccak256("ADMIN").
+
+For DRS v2, initialize Batch A and Batch B with different guardian sets. Your DAO (manager) can refill the locked batch any time.
