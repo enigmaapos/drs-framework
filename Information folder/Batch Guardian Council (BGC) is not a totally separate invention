@@ -1,0 +1,27 @@
+Batch Guardian Council (BGC) is not a totally separate invention — it’s an evolution of the DRS (Decentralized Recovery System) framework.
+
+Think of it this way:
+
+DRS (original):
+
+Single guardian council (e.g., 5-of-7).
+
+Provides recovery and compromise detection (6/7 warn, 7/7 lock).
+
+Works great until that one council itself is captured.
+
+
+BGC (upgraded DRS):
+
+Two (or more) batches of guardian councils.
+
+Batch-1 is active, Batch-2 is on standby.
+
+If Batch-1 is compromised/locked, Batch-2 takes over immediately.
+
+Only the DAO/governance can reseed new batches after a crisis.
+
+
+
+So yes — BGC is still part of the DRS framework, just the next generation design.
+It adds resilience against long-term capture by making sure there’s always another clean set of guardians, and that only the DAO (not attackers) can pick the new ones.
