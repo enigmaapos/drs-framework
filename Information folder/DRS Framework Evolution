@@ -1,0 +1,95 @@
+DRS Framework Evolution
+
+The Decentralized Recovery System (DRS) is a guardian-based security layer that protects smart contracts against lost keys, hacks, and role compromise. Over time, the framework has evolved into two main versions:
+
+
+---
+
+🔹 DRS v1 (Classic Guardian Council)
+
+Single council of guardians (e.g., 5-of-7).
+
+Protects the deployer and/or admin roles.
+
+Recovery Flow:
+
+1. Guardian proposes new admin/deployer.
+
+
+2. Guardians approve (threshold reached).
+
+
+3. Role is replaced safely.
+
+
+
+Compromise Detection:
+
+6/7 approvals = ⚠️ Warning.
+
+7/7 approvals = 🚨 Auto-lock (possible full compromise).
+
+
+
+✅ Strengths:
+
+Simple and efficient.
+
+Good protection against accidental key loss or partial hacks.
+
+
+⚠️ Weakness:
+
+If the entire council is compromised, attackers could permanently hijack the system.
+
+
+
+---
+
+🔹 DRS v2 (Batch Guardian Council — BGC)
+
+Multiple batches of councils (e.g., Batch-1 active, Batch-2 standby).
+
+Batch-1 governs day-to-day recovery.
+
+If Batch-1 is compromised → Batch-2 automatically takes over.
+
+Only the DAO/governance can reseed new batches, ensuring the system can’t be hijacked by attackers.
+
+
+Recovery & Rotation Flow:
+
+1. Batch-1 compromised or locked.
+
+
+2. Batch-2 instantly activated as new council.
+
+
+3. DAO/governance reseeds Batch-1 with new guardians.
+
+
+
+✅ Strengths:
+
+Resilient to entire council compromise.
+
+Attackers can’t pick new guardians; only DAO can.
+
+Provides continuous control back to the community.
+
+
+⚡ Impact:
+
+Shifts control from static multisig-like guardians to DAO-driven rotating guardianship.
+
+Prevents permanent hijacks and ensures protocols remain community-owned long-term.
+
+
+
+---
+
+🔑 Which One to Use?
+
+DRS v1 (Classic): Lighter, cheaper, easier to integrate. Best for smaller projects or early-stage protocols.
+
+DRS v2 (BGC): Stronger, more future-proof. Best for protocols with large treasuries, high governance stakes, or long-term security needs.
