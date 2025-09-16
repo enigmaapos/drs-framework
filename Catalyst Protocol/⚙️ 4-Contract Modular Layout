@@ -1,0 +1,55 @@
+⚙️ 4-Contract Modular Layout
+
+1. CATA.sol (ERC20 token)
+
+Pure ERC20Upgradeable with burn + MINTER_ROLE.
+
+Only CatalystStaking can mint rewards.
+
+GuardianCouncil is admin.
+
+
+
+---
+
+2. CatalystStaking.sol (Core logic)
+
+Contains all computations:
+
+Collection Registration (verified/unverified/blue-chip).
+
+Staking / Unstaking NFTs (custodial).
+
+Reward computation (welcome bonus, harvest rewards).
+
+Blue-chip logic (special rewards, collection-level benefits).
+
+Burn tracking (for governance weight).
+
+Emits data events for Governance to use (stakeAge, burns, collection stats).
+
+
+👉 This will now hold everything heavy from your merged file, except token minting (delegated to CATA) and governance voting lifecycle (moved out).
+
+
+---
+
+3. CatalystGovernance.sol
+
+Manages proposals, votes, executions.
+
+Voting weight = data pulled from CatalystStaking (burnedBy, stakeAge, collection stakes).
+
+Lightweight (no computation) → just consumes staking stats.
+
+
+
+---
+
+4. GuardianCouncil.sol
+
+Manages security & upgrade authority.
+
+Protects both CATA and CatalystStaking.
+
+7 guardians, 5 approvals required for recovery / upgrade execution.
