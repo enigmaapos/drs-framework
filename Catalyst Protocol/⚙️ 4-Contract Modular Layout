@@ -1,174 +1,143 @@
-⚙️ 4-Contract Modular Layout
-🔹 Final Upgradeable Layout
+---
+
+⚙️ Final Upgradeable Layout — Catalyst Protocol
+
+
+---
 
 1. CATA.sol (ERC20Upgradeable)
-Pure ERC20Upgradeable with burn + MINTER_ROLE.
 
-Only CatalystStaking can mint rewards.
+Base: ERC20Upgradeable, AccessControlUpgradeable, UUPSUpgradeable.
 
-GuardianCouncil is admin.
-
-
-
-
-ERC20Upgradeable + AccessControlUpgradeable + UUPSUpgradeable.
+Roles:
 
 DEFAULT_ADMIN_ROLE → GuardianCouncil.
 
-MINTER_ROLE → CatalystStaking.
+MINTER_ROLE → CatalystStaking (assigned by GuardianCouncil).
 
-Hard recyclable global cap = 1B tokens (totalSupply() + mint ≤ cap).
 
-Only CatalystStaking can mint rewards.
+Cap: Hard recyclable global cap = 1B CATA (totalSupply() + mint ≤ cap).
+
+Minting:
+
+Only CatalystStaking can mint rewards (enforced by MINTER_ROLE).
+
+
+Burning:
 
 Any holder can burn().
+
+
 
 
 ---
 
 2. CatalystStaking.sol (Core)
 
-Contains all computations:
+Base: AccessControlUpgradeable, ReentrancyGuardUpgradeable, PausableUpgradeable, UUPSUpgradeable.
 
-Collection Registration (verified/unverified/blue-chip).
+Core Logic:
 
-Staking / Unstaking NFTs (custodial).
+Collection registration (Unverified / Verified / Bluechip).
 
-Reward computation (welcome bonus, harvest rewards).
+Custodial NFT staking (term & permanent).
 
-Blue-chip logic (special rewards, collection-level benefits).
+Reward computation (welcome bonus, harvest, ongoing rewards).
+
+Bluechip staking (counts under permanent cap).
 
 Burn tracking (for governance weight).
 
-Emits data events for Governance to use (stakeAge, burns, collection stats).
+
+Caps:
+
+GLOBAL_NFT_CAP = 1,000,000 NFTs total.
+
+GLOBAL_NFT_TERM_CAP = 750,000 NFTs.
+
+GLOBAL_NFT_PERM_CAP = 250,000 NFTs (includes bluechip).
 
 
-👉 This will now hold everything heavy from your merged file, except token minting (delegated to CATA) and governance voting lifecycle (moved out).
+Reward Minting:
+
+Calls into CATA for minting, which enforces 1B global cap.
 
 
+Events:
 
-Upgradeable.
+Emits stake, unstake, burn, reward harvest, and collection stats for Governance.
 
-Full staking + collection logic.
 
-Custodial NFT staking with caps:
+Controls:
 
-GLOBAL_NFT_CAP = 1,000,000.
+GuardianCouncil can pause/resume staking via PausableUpgradeable.
 
-GLOBAL_NFT_TERM_CAP = 750,000.
 
-GLOBAL_NFT_PERM_CAP = 250,000 (bluechip counts here).
-
-Reward minting goes through CATA with the 1B cap enforced.
-
-Emits stake, unstake, burn, and reward stats for Governance to use.
-
-GuardianCouncil can pause/resume staking (PausableUpgradeable).
 
 
 ---
 
 3. CatalystGovernance.sol
 
+Base: AccessControlUpgradeable, UUPSUpgradeable.
 
-Manages proposals, votes, executions.
+Core Logic:
 
-Voting weight = data pulled from CatalystStaking (burnedBy, stakeAge, collection stakes).
+Proposals (create, vote, execute).
 
-Lightweight (no computation) → just consumes staking stats.
+Voting weight = derived from staking stats (burnedBy, stakeAge, collection stakes).
+
+Executes governance-approved changes by calling setter functions in CatalystStaking (e.g., reward rate, fees, collection tier upgrades).
 
 
-Upgradeable.
+Design:
 
-Handles proposals, votes, executions.
+Lightweight — no heavy computation.
 
-Reads staking data (stakeAge, burnedBy, collection stats) from CatalystStaking for voting weights.
+Avoids 24KB contract size issue by offloading logic to CatalystStaking.
 
-Executes parameter changes by calling setter functions in CatalystStaking (fees, reward rate, tier upgrades, etc.).
 
-Slim design → avoids 24KB contract size issue.
 
 
 ---
 
-4. GuardianCouncil.sol
+4. GuardianCouncil.sol (BatchGuardianCouncilUpgradeable)
 
-Manages security & upgrade authority.
+Base: AccessControlUpgradeable, UUPSUpgradeable.
 
-Protects both CATA and CatalystStaking.
+Structure:
 
-7 guardians, 5 approvals required for recovery / upgrade execution.
+Two guardian batches: active (7 guardians) and standby (7 guardians).
+
+5-of-7 approvals required to execute a recovery/admin action.
 
 
-Upgradeable.
+Recovery Actions:
 
-7 guardians, 5 approvals required (5-of-7 multisig).
+Council proposals include (target, callData).
+
+Executes atomic calldata exactly as supplied (grant→revoke must be atomic).
+
+Threshold behavior:
+
+5 approvals: execute.
+
+6 approvals: emit warning.
+
+7 approvals: execute + rotate standby → active.
+
+
+
+Controls:
 
 Holds DEFAULT_ADMIN_ROLE for both CATA and CatalystStaking.
 
-Authorizes upgrades & recoveries across all contracts.
+Manages upgrades across all contracts.
 
-Can reassign MINTER_ROLE if Staking contract is upgraded/redeployed.
-
-
-BatchGuardianCouncilUpgradeable
-
-UUPS upgradeable
-
-Two batches (active, standby) of fixed GUARDIAN_COUNT (7)
-
-DAO-managed reseed/rotate
-
-Recovery proposals carry (callTarget, callData) executed atomically
-
-5/7 threshold; 6/7 => warning; 7/7 => lock + auto-activate standby
+Can reassign MINTER_ROLE if CatalystStaking is redeployed.
 
 
-IMPORTANT SAFETY NOTE (READ THIS FIRST)
+Safety Note:
 
-The BatchGuardianCouncil executes exact calldata supplied in each recovery proposal.
-That means the council itself does NOT perform role revocation/granting logic — it merely
-executes the calldata you supply (atomically) on the specified callTarget.
-
-Always ensure the calldata you propose implements the safe "grant → revoke" pattern
-in a single atomic call. NEVER perform a "revoke then grant" in separate transactions.
-
-Recommended safe patterns (pick one):
-
-1. Preferred: Target contract exposes an atomic swap function, e.g.:
-
-// inside target (e.g., CatalystStaking, CATA, Governance)
-function swapAdmin(address newAdmin, address oldAdmin) external onlyCouncil {
-// 1) grant new
-if (!hasRole(DEFAULT_ADMIN_ROLE, newAdmin)) _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
-// 2) revoke old
-if (oldAdmin != address(0) && hasRole(DEFAULT_ADMIN_ROLE, oldAdmin)) _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
-emit AdminSwapped(oldAdmin, newAdmin);
-}
-
-// Proposal's callData (Solidity):
-bytes memory callData = abi.encodeWithSelector(bytes4(keccak256("swapAdmin(address,address)")), newAdmin, oldAdmin);
-
-
-2. Alternative: Target provides a multicall(bytes[]) that executes internal calls in order,
-and you send a multicall that runs grant(new) then revoke(old) within one external invocation.
-
-
-3. If you must call existing grant/revoke functions, encode them in a single multicall-like
-payload on the target (never send two separate proposals/txs revoking first).
-
-
-
-NOTE:
-
-The council will revert if the calldata reverts — so operations are atomic.
-
-Make sure the target enforces onlyCouncil or msg.sender == councilAddress to avoid abuse.
-
-Use a DAO multisig as the council's DEFAULT_ADMIN_ROLE and DAO_ROLE for upgrade authority.
-
-
-Summary: always propose atomic calldata that grants the new admin first, then revokes the old admin.
-*/
-
+Always encode calldata with safe grant new → revoke old admin patterns atomically.
 
