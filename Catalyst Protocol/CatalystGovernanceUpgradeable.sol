@@ -8,7 +8,7 @@ import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.
 
 /// @notice Minimal interface for BatchGuardianCouncil (reseeding)
 interface IBatchGuardianCouncil {
-    function daoSeedActiveBatch(address[7] calldata batch) external;
+    function daoProposeSeedStandbyBatch(address[7] calldata batch) external;
 }
 
 /// @notice Minimal interface for CatalystStaking (for governance weights)
@@ -79,7 +79,7 @@ contract CatalystGovernanceUpgradeable is
         REGISTRATION_FEE_FALLBACK,
         VOTING_PARAM,
         TIER_UPGRADE,
-        COUNCIL_RESEED
+        COUNCIL_PROPOSE_STANDBY // Corrected enum value
     }
 
     mapping(bytes32 => Proposal) public proposals;
@@ -129,6 +129,7 @@ contract CatalystGovernanceUpgradeable is
     // --- Errors ---
     error Ineligible();
     error BadParam();
+    error ZeroAddress();
 
     // -------------------------
     // Init
@@ -204,8 +205,8 @@ contract CatalystGovernanceUpgradeable is
         uint256 newValue,
         address collectionContext
     ) external returns (bytes32 id) {
-        // only allow non-COUNCIL_RESEED here; specialized function exists below
-        require(pType != ProposalType.COUNCIL_RESEED, "use proposeCouncilReseed");
+        // only allow non-COUNCIL_PROPOSE_STANDBY here; specialized function exists below
+        require(pType != ProposalType.COUNCIL_PROPOSE_STANDBY, "use proposeCouncilProposeStandby");
 
         (uint256 weight,) = _votingWeight(msg.sender);
         if (weight == 0) revert Ineligible();
@@ -234,7 +235,7 @@ contract CatalystGovernanceUpgradeable is
 
     /// @notice Specialized proposer for council reseed. Stores the 7-address batch in proposalPayloads.
     /// - rejects any zero address in the batch.
-    function proposeCouncilReseed(address councilAddress, address[7] calldata newBatch)
+    function proposeCouncilProposeStandby(address councilAddress, address[7] calldata newBatch)
         external
         returns (bytes32 id)
     {
@@ -250,13 +251,13 @@ contract CatalystGovernanceUpgradeable is
         // create deterministic id that includes the encoded batch bytes
         bytes memory batchEncoded = abi.encode(newBatch);
         id = keccak256(
-            abi.encodePacked(uint256(ProposalType.COUNCIL_RESEED), councilAddress, batchEncoded, block.number, msg.sender)
+            abi.encodePacked(uint256(ProposalType.COUNCIL_PROPOSE_STANDBY), councilAddress, batchEncoded, block.number, msg.sender)
         );
 
         Proposal storage p = proposals[id];
         require(p.startBlock == 0, "exists");
 
-        p.pType = ProposalType.COUNCIL_RESEED;
+        p.pType = ProposalType.COUNCIL_PROPOSE_STANDBY;
         p.paramTarget = 0;
         p.newValue = 0;
         p.collectionAddress = councilAddress;
@@ -271,8 +272,7 @@ contract CatalystGovernanceUpgradeable is
             proposalIndex[id] = proposalIds.length;
         }
 
-        emit ProposalCreated(id, ProposalType.COUNCIL_RESEED, 0, councilAddress, msg.sender, 0, p.startBlock, p.endBlock);
-        emit CouncilReseedProposed(id, councilAddress);
+        emit ProposalCreated(id, ProposalType.COUNCIL_PROPOSE_STANDBY, 0, councilAddress, msg.sender, 0, p.startBlock, p.endBlock);
     }
 
     // -------------------------
@@ -306,7 +306,7 @@ contract CatalystGovernanceUpgradeable is
     // -------------------------
     // Execute
     // -------------------------
-    /// @notice Execute passed proposal. For COUNCIL_RESEED it will call daoSeedActiveBatch on the council contract.
+    /// @notice Execute passed proposal.
     function executeProposal(bytes32 id) external nonReentrant {
         Proposal storage p = proposals[id];
         require(p.startBlock != 0, "not found");
@@ -350,25 +350,19 @@ contract CatalystGovernanceUpgradeable is
         } else if (p.pType == ProposalType.TIER_UPGRADE) {
             // purely an event here; real tier upgrade must be enforced in staking contract by admin role
             emit CollectionTierUpgraded(p.collectionAddress, uint8(2)); // 2 = BLUECHIP (example)
-        } else if (p.pType == ProposalType.COUNCIL_RESEED) {
-            // decode the stored payload and call daoSeedActiveBatch on the target council contract
+        } else if (p.pType == ProposalType.COUNCIL_PROPOSE_STANDBY) {
             bytes memory payload = proposalPayloads[id];
             require(payload.length > 0, "payload missing");
             address councilAddr = p.collectionAddress;
             require(councilAddr != address(0), "council addr missing");
 
-            // decode address[7]
             address[7] memory batch = abi.decode(payload, (address[7]));
 
-            // perform sanity check: no zero addresses
             for (uint256 i = 0; i < 7; ++i) {
                 require(batch[i] != address(0), "zero in batch");
             }
 
-            // call the council contract (DAO authority must be set on the BatchGuardianCouncil)
-            IBatchGuardianCouncil(councilAddr).daoSeedActiveBatch(batch);
-
-            emit CouncilReseedExecuted(id, councilAddr);
+            IBatchGuardianCouncil(councilAddr).daoProposeSeedStandbyBatch(batch);
         } else {
             revert BadParam();
         }
@@ -377,12 +371,11 @@ contract CatalystGovernanceUpgradeable is
     }
 
     // -------------------------
-    // Info
+    // Info and Helpers
     // -------------------------
     function getProposalInfo(bytes32 id) external view returns (ProposalInfo memory) {
         Proposal memory p = proposals[id];
         
-        // Return the struct instance
         return ProposalInfo(
             p.pType,
             p.paramTarget,
@@ -397,25 +390,16 @@ contract CatalystGovernanceUpgradeable is
         );
     }
 
-    // -------------------------
-    // Helpers for frontends
-    // -------------------------
-    /// @notice Encode a council batch (address[7]) for off-chain use
     function encodeCouncilBatch(address[7] calldata batch) external pure returns (bytes memory) {
         return abi.encode(batch);
     }
 
-    /// @notice Decode previously-encoded council batch
     function decodeCouncilBatch(bytes calldata data) external pure returns (address[7] memory batch) {
         return abi.decode(data, (address[7]));
     }
 
-    // -------------------------
-    // Voting weight (wired to staking)
-    // -------------------------
     function _votingWeight(address voter) internal view returns (uint256 weight, address attributedCollection) {
         if (address(staking) == address(0)) return (0, address(0));
-        // staking.votingWeight returns (weightScaled, attributedCollection)
         try staking.votingWeight(voter) returns (uint256 w, address a) {
             return (w, a);
         } catch {
