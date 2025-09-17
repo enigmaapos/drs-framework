@@ -277,7 +277,7 @@ contract CatalystGovernanceUpgradeable is
     // -------------------------
     // Mocked voting weight
     // -------------------------
-    function _votingWeight(address voter) internal view returns (uint256 weight, address attributedCollection) {
+    function _votingWeight(address voter) internal pure returns (uint256 weight, address attributedCollection) {
         if (voter == address(0)) return (0, address(0));
         // placeholder: everyone has equal weight
         return (WEIGHT_SCALE, address(0));
