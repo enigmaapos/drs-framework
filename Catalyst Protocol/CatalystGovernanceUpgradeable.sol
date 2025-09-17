@@ -6,7 +6,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
-/// @notice Minimal interface for BatchGuardianCouncil (reseeding)
+/// @notice Minimal interface for BatchGuardianCouncil (reseeding + upgrade)
 interface IBatchGuardianCouncil {
     function daoSeedActiveBatch(address[7] calldata batch) external;
     function daoProposeSeedStandbyBatch(address[7] calldata batch) external;
@@ -15,6 +15,9 @@ interface IBatchGuardianCouncil {
     function proposeNewDAO(address newDAO) external;
     function commitNewDAO() external;
     function daoClearLockAndWarning() external;
+
+    /// @notice UUPS upgrade entrypoint on the council proxy/implementation hosting contract.
+    function upgradeTo(address newImplementation) external;
 }
 
 /// @notice Minimal interface for CatalystStaking (for governance weights)
@@ -24,7 +27,7 @@ interface ICatalystStaking {
 }
 
 /// @title Catalyst Governance (Upgradeable) with Council Reseed + Real Voting Weight
-/// @notice Full implementation: generic proposals, council reseed, voting, execution, helpers.
+/// @notice Generic governance with specialized council management proposals.
 contract CatalystGovernanceUpgradeable is
     Initializable,
     AccessControlUpgradeable,
@@ -91,7 +94,8 @@ contract CatalystGovernanceUpgradeable is
         COUNCIL_ACTIVATE_STANDBY,
         COUNCIL_PROPOSE_NEW_DAO,
         COUNCIL_COMMIT_NEW_DAO,
-        COUNCIL_CLEAR_LOCK
+        COUNCIL_CLEAR_LOCK,
+        UPGRADE_COUNCIL
     }
 
     mapping(bytes32 => Proposal) public proposals;
@@ -137,6 +141,15 @@ contract CatalystGovernanceUpgradeable is
     event CollectionTierUpgraded(address indexed collection, uint8 newTier);
     event CouncilReseedProposed(bytes32 indexed id, address indexed councilAddress);
     event CouncilReseedExecuted(bytes32 indexed id, address indexed councilAddress);
+
+    // explicit success events for council operations (better observability)
+    event CouncilProposeStandbyExecuted(bytes32 indexed id, address indexed councilAddress);
+    event CouncilCommitStandbyExecuted(bytes32 indexed id, address indexed councilAddress);
+    event CouncilActivateStandbyExecuted(bytes32 indexed id, address indexed councilAddress);
+    event CouncilProposeNewDAOExecuted(bytes32 indexed id, address indexed councilAddress, address newDAO);
+    event CouncilCommitNewDAOExecuted(bytes32 indexed id, address indexed councilAddress);
+    event CouncilClearLockExecuted(bytes32 indexed id, address indexed councilAddress);
+    event CouncilUpgraded(bytes32 indexed id, address indexed councilAddress, address newImpl);
 
     // --- Errors ---
     error Ineligible();
@@ -460,6 +473,38 @@ contract CatalystGovernanceUpgradeable is
         emit ProposalCreated(id, ProposalType.COUNCIL_CLEAR_LOCK, 0, council, msg.sender, 0, p.startBlock, p.endBlock);
     }
 
+    /// @notice Propose an implementation upgrade for the Council (UPGRADE_COUNCIL)
+    function proposeCouncilUpgrade(address newImplementation) external returns (bytes32 id) {
+        if (council == address(0) || newImplementation == address(0)) revert ZeroAddress();
+        (uint256 weight,) = _votingWeight(msg.sender);
+        if (weight == 0) revert Ineligible();
+
+        bytes memory implEncoded = abi.encode(newImplementation);
+        id = keccak256(
+            abi.encodePacked(uint256(ProposalType.UPGRADE_COUNCIL), council, implEncoded, block.number, msg.sender)
+        );
+
+        Proposal storage p = proposals[id];
+        require(p.startBlock == 0, "exists");
+
+        p.pType = ProposalType.UPGRADE_COUNCIL;
+        p.paramTarget = 0;
+        p.newValue = 0;
+        p.collectionAddress = council;
+        p.proposer = msg.sender;
+        p.startBlock = block.number;
+        p.endBlock = block.number + votingDurationBlocks;
+
+        proposalPayloads[id] = implEncoded;
+
+        if (proposalIndex[id] == 0) {
+            proposalIds.push(id);
+            proposalIndex[id] = proposalIds.length;
+        }
+
+        emit ProposalCreated(id, ProposalType.UPGRADE_COUNCIL, 0, council, msg.sender, 0, p.startBlock, p.endBlock);
+    }
+
     // -------------------------
     // Vote
     // -------------------------
@@ -499,24 +544,29 @@ contract CatalystGovernanceUpgradeable is
         require(!p.executed, "executed");
         require(p.votesScaled >= minVotesRequiredScaled, "quorum");
 
+        // mark executed first (reentrancy safe because of nonReentrant)
         p.executed = true;
 
         if (p.pType == ProposalType.BASE_REWARD) {
             uint256 old = baseRewardRate;
             baseRewardRate = p.newValue > maxBaseRewardRate ? maxBaseRewardRate : p.newValue;
             emit BaseRewardRateUpdated(old, baseRewardRate);
+
         } else if (p.pType == ProposalType.HARVEST_FEE) {
             uint256 old = initialHarvestBurnFeeRate;
             initialHarvestBurnFeeRate = p.newValue;
             emit HarvestFeeUpdated(old, p.newValue);
+
         } else if (p.pType == ProposalType.UNSTAKE_FEE) {
             uint256 old = unstakeBurnFee;
             unstakeBurnFee = p.newValue;
             emit UnstakeFeeUpdated(old, p.newValue);
+
         } else if (p.pType == ProposalType.REGISTRATION_FEE_FALLBACK) {
             uint256 old = collectionRegistrationFee;
             collectionRegistrationFee = p.newValue;
             emit RegistrationFeeUpdated(old, p.newValue);
+
         } else if (p.pType == ProposalType.VOTING_PARAM) {
             uint8 t = p.paramTarget;
             if (t == 0) {
@@ -532,8 +582,10 @@ contract CatalystGovernanceUpgradeable is
                 collectionVoteCapPercent = p.newValue;
                 emit VotingParamUpdated(t, old, p.newValue);
             } else revert BadParam();
+
         } else if (p.pType == ProposalType.TIER_UPGRADE) {
-            emit CollectionTierUpgraded(p.collectionAddress, uint8(2));
+            emit CollectionTierUpgraded(p.collectionAddress, uint8(2)); // event-only
+
         } else if (p.pType == ProposalType.COUNCIL_RESEED_ACTIVE) {
             bytes memory payload = proposalPayloads[id];
             require(payload.length > 0, "payload missing");
@@ -541,8 +593,13 @@ contract CatalystGovernanceUpgradeable is
             for (uint256 i = 0; i < 7; ++i) {
                 require(batch[i] != address(0), "zero in batch");
             }
-            IBatchGuardianCouncil(council).daoSeedActiveBatch(batch);
-            emit CouncilReseedExecuted(id, council);
+            try IBatchGuardianCouncil(council).daoSeedActiveBatch(batch) {
+                emit CouncilReseedExecuted(id, council);
+                delete proposalPayloads[id];
+            } catch (bytes memory reason) {
+                _revertWithReason(reason);
+            }
+
         } else if (p.pType == ProposalType.COUNCIL_PROPOSE_STANDBY) {
             bytes memory payload = proposalPayloads[id];
             require(payload.length > 0, "payload missing");
@@ -550,21 +607,68 @@ contract CatalystGovernanceUpgradeable is
             for (uint256 i = 0; i < 7; ++i) {
                 require(batch[i] != address(0), "zero in batch");
             }
-            IBatchGuardianCouncil(council).daoProposeSeedStandbyBatch(batch);
+            try IBatchGuardianCouncil(council).daoProposeSeedStandbyBatch(batch) {
+                emit CouncilProposeStandbyExecuted(id, council);
+                delete proposalPayloads[id];
+            } catch (bytes memory reason) {
+                _revertWithReason(reason);
+            }
+
         } else if (p.pType == ProposalType.COUNCIL_COMMIT_STANDBY) {
-            IBatchGuardianCouncil(council).daoCommitSeedStandbyBatch();
+            try IBatchGuardianCouncil(council).daoCommitSeedStandbyBatch() {
+                emit CouncilCommitStandbyExecuted(id, council);
+            } catch (bytes memory reason) {
+                _revertWithReason(reason);
+            }
+
         } else if (p.pType == ProposalType.COUNCIL_ACTIVATE_STANDBY) {
-            IBatchGuardianCouncil(council).daoActivateStandby();
+            try IBatchGuardianCouncil(council).daoActivateStandby() {
+                emit CouncilActivateStandbyExecuted(id, council);
+            } catch (bytes memory reason) {
+                _revertWithReason(reason);
+            }
+
         } else if (p.pType == ProposalType.COUNCIL_PROPOSE_NEW_DAO) {
             bytes memory payload = proposalPayloads[id];
             require(payload.length > 0, "payload missing");
             address newDAO = abi.decode(payload, (address));
             require(newDAO != address(0), "zero address");
-            IBatchGuardianCouncil(council).proposeNewDAO(newDAO);
+            try IBatchGuardianCouncil(council).proposeNewDAO(newDAO) {
+                emit CouncilProposeNewDAOExecuted(id, council, newDAO);
+                delete proposalPayloads[id];
+            } catch (bytes memory reason) {
+                _revertWithReason(reason);
+            }
+
         } else if (p.pType == ProposalType.COUNCIL_COMMIT_NEW_DAO) {
-            IBatchGuardianCouncil(council).commitNewDAO();
+            try IBatchGuardianCouncil(council).commitNewDAO() {
+                emit CouncilCommitNewDAOExecuted(id, council);
+            } catch (bytes memory reason) {
+                _revertWithReason(reason);
+            }
+
         } else if (p.pType == ProposalType.COUNCIL_CLEAR_LOCK) {
-            IBatchGuardianCouncil(council).daoClearLockAndWarning();
+            try IBatchGuardianCouncil(council).daoClearLockAndWarning() {
+                emit CouncilClearLockExecuted(id, council);
+            } catch (bytes memory reason) {
+                _revertWithReason(reason);
+            }
+
+        } else if (p.pType == ProposalType.UPGRADE_COUNCIL) {
+            bytes memory payload = proposalPayloads[id];
+            require(payload.length > 0, "payload missing");
+            address newImpl = abi.decode(payload, (address));
+            require(newImpl != address(0), "zero address");
+
+            // The governance contract must be DAO_ROLE on the council so that
+            // _authorizeUpgrade on the council allows this call.
+            try IBatchGuardianCouncil(council).upgradeTo(newImpl) {
+                emit CouncilUpgraded(id, council, newImpl);
+                delete proposalPayloads[id];
+            } catch (bytes memory reason) {
+                _revertWithReason(reason);
+            }
+
         } else {
             revert BadParam();
         }
@@ -614,6 +718,16 @@ contract CatalystGovernanceUpgradeable is
             return (w, a);
         } catch {
             return (0, address(0));
+        }
+    }
+
+    // -------------------------
+    // Utility: revert with reason bytes if present
+    // -------------------------
+    function _revertWithReason(bytes memory reason) internal pure {
+        if (reason.length == 0) revert(); // generic revert
+        assembly {
+            revert(add(reason, 32), mload(reason))
         }
     }
 
