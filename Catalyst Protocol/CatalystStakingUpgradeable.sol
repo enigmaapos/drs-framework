@@ -624,7 +624,7 @@ contract CatalystStakingUpgradeable is
     }
 
     // ---------- Harvest ----------
-    function _getDynamicHarvestBurnFeeRate() internal view returns (uint256) {
+    function _getDynamicHarvestBurnFeeRate() internal pure returns (uint256) {
         return 10; // 10% for example
     }
 
