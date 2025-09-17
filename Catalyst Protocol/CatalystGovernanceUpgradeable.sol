@@ -6,9 +6,19 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
-/// @title Catalyst Governance (Upgradeable)
-/// @notice Lightweight governance system consuming staking stats later.
-///         Upgradeable via UUPS, admin controlled by GuardianCouncil.
+/// @notice Minimal interface for BatchGuardianCouncil (reseeding)
+interface IBatchGuardianCouncil {
+    function daoSeedActiveBatch(address[7] calldata batch) external;
+}
+
+/// @notice Minimal interface for CatalystStaking (for governance weights)
+interface ICatalystStaking {
+    /// @dev returns (weightScaled, attributedCollection)
+    function votingWeight(address user) external view returns (uint256 weight, address attributedCollection);
+}
+
+/// @title Catalyst Governance (Upgradeable) with Council Reseed + Real Voting Weight
+/// @notice Full implementation: generic proposals, council reseed, voting, execution, helpers.
 contract CatalystGovernanceUpgradeable is
     Initializable,
     AccessControlUpgradeable,
@@ -19,7 +29,7 @@ contract CatalystGovernanceUpgradeable is
     bytes32 public constant CONTRACT_ADMIN_ROLE = keccak256("CONTRACT_ADMIN_ROLE");
 
     // --- Access control ---
-    address public council;
+    address public council; // batch guardian council address (for swapAdmin ops by council)
 
     event AdminSwapped(address indexed oldAdmin, address indexed newAdmin);
     event CouncilSet(address indexed oldCouncil, address indexed newCouncil);
@@ -29,11 +39,27 @@ contract CatalystGovernanceUpgradeable is
         _;
     }
 
+    // --- External contracts ---
+    ICatalystStaking public staking; // CatalystStaking contract
+
     // --- Governance state ---
     uint256 public constant WEIGHT_SCALE = 1e18;
-    uint256 public minStakeAgeForVoting; // placeholder, not enforced yet
+    uint256 public minStakeAgeForVoting; // placeholder, not enforced here (staking returns weight)
 
     struct Proposal {
+        ProposalType pType;
+        uint8 paramTarget; // semantic meaning per pType
+        uint256 newValue;
+        address collectionAddress; // optional context or target address (e.g., council address for reseed)
+        address proposer;
+        uint256 startBlock;
+        uint256 endBlock;
+        uint256 votesScaled;
+        bool executed;
+    }
+
+    // A new struct to hold all proposal info for a clean return
+    struct ProposalInfo {
         ProposalType pType;
         uint8 paramTarget;
         uint256 newValue;
@@ -43,6 +69,7 @@ contract CatalystGovernanceUpgradeable is
         uint256 endBlock;
         uint256 votesScaled;
         bool executed;
+        bytes payload;
     }
 
     enum ProposalType {
@@ -51,12 +78,16 @@ contract CatalystGovernanceUpgradeable is
         UNSTAKE_FEE,
         REGISTRATION_FEE_FALLBACK,
         VOTING_PARAM,
-        TIER_UPGRADE
+        TIER_UPGRADE,
+        COUNCIL_RESEED
     }
 
     mapping(bytes32 => Proposal) public proposals;
     mapping(bytes32 => mapping(address => bool)) public hasVoted;
     mapping(bytes32 => mapping(address => uint256)) public proposalCollectionVotesScaled;
+
+    // store arbitrary payloads (encoded bytes) for proposals that need more data (e.g., council reseed batch)
+    mapping(bytes32 => bytes) public proposalPayloads;
 
     bytes32[] public proposalIds;
     mapping(bytes32 => uint256) public proposalIndex; // 1-based
@@ -92,6 +123,8 @@ contract CatalystGovernanceUpgradeable is
     event UnstakeFeeUpdated(uint256 oldValue, uint256 newValue);
     event RegistrationFeeUpdated(uint256 oldValue, uint256 newValue);
     event CollectionTierUpgraded(address indexed collection, uint8 newTier);
+    event CouncilReseedProposed(bytes32 indexed id, address indexed councilAddress);
+    event CouncilReseedExecuted(bytes32 indexed id, address indexed councilAddress);
 
     // --- Errors ---
     error Ineligible();
@@ -100,9 +133,16 @@ contract CatalystGovernanceUpgradeable is
     // -------------------------
     // Init
     // -------------------------
+    /// @param admin initial admin (DEFAULT_ADMIN_ROLE & CONTRACT_ADMIN_ROLE)
+    /// @param council_ initial batch guardian council contract address
+    /// @param staking_ CatalystStaking contract address (used to query voting weight)
+    /// @param votingDuration voting length in blocks
+    /// @param minVotes scaled minimum votes required (scale = WEIGHT_SCALE)
+    /// @param capPercent collection cap percent (0..100)
     function initialize(
         address admin,
         address council_,
+        address staking_,
         uint256 votingDuration,
         uint256 minVotes,
         uint256 capPercent
@@ -111,19 +151,20 @@ contract CatalystGovernanceUpgradeable is
         __UUPSUpgradeable_init();
         __ReentrancyGuard_init();
 
-        require(admin != address(0) && council_ != address(0), "zero address");
+        require(admin != address(0) && council_ != address(0) && staking_ != address(0), "zero address");
         require(capPercent <= 100, "cap>100");
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(CONTRACT_ADMIN_ROLE, admin);
 
         council = council_;
+        staking = ICatalystStaking(staking_);
         votingDurationBlocks = votingDuration;
         minVotesRequiredScaled = minVotes;
         collectionVoteCapPercent = capPercent;
 
         maxBaseRewardRate = 1e18;
-        minStakeAgeForVoting = 100; // placeholder
+        minStakeAgeForVoting = 0;
     }
 
     // -------------------------
@@ -136,6 +177,12 @@ contract CatalystGovernanceUpgradeable is
         emit CouncilSet(old, newCouncil);
     }
 
+    function setStaking(address newStaking) external onlyRole(CONTRACT_ADMIN_ROLE) {
+        require(newStaking != address(0), "zero");
+        staking = ICatalystStaking(newStaking);
+    }
+
+    /// @notice swap admin atomically (called by council)
     function swapAdmin(address newAdmin, address oldAdmin) external onlyCouncil {
         require(newAdmin != address(0), "zero");
         if (!hasRole(DEFAULT_ADMIN_ROLE, newAdmin)) {
@@ -148,14 +195,18 @@ contract CatalystGovernanceUpgradeable is
     }
 
     // -------------------------
-    // Governance actions
+    // Propose (generic)
     // -------------------------
+    /// @notice Create a generic proposal (non-reseed). Caller must have voting weight > 0.
     function propose(
         ProposalType pType,
         uint8 paramTarget,
         uint256 newValue,
         address collectionContext
     ) external returns (bytes32 id) {
+        // only allow non-COUNCIL_RESEED here; specialized function exists below
+        require(pType != ProposalType.COUNCIL_RESEED, "use proposeCouncilReseed");
+
         (uint256 weight,) = _votingWeight(msg.sender);
         if (weight == 0) revert Ineligible();
 
@@ -181,8 +232,54 @@ contract CatalystGovernanceUpgradeable is
         emit ProposalCreated(id, pType, paramTarget, collectionContext, msg.sender, newValue, p.startBlock, p.endBlock);
     }
 
-    function vote(bytes32 id, address attributedCollection) external {
+    /// @notice Specialized proposer for council reseed. Stores the 7-address batch in proposalPayloads.
+    /// - rejects any zero address in the batch.
+    function proposeCouncilReseed(address councilAddress, address[7] calldata newBatch)
+        external
+        returns (bytes32 id)
+    {
+        if (councilAddress == address(0)) revert BadParam();
         (uint256 weight,) = _votingWeight(msg.sender);
+        if (weight == 0) revert Ineligible();
+
+        // validate nonzero batch
+        for (uint256 i = 0; i < 7; ++i) {
+            if (newBatch[i] == address(0)) revert BadParam();
+        }
+
+        // create deterministic id that includes the encoded batch bytes
+        bytes memory batchEncoded = abi.encode(newBatch);
+        id = keccak256(
+            abi.encodePacked(uint256(ProposalType.COUNCIL_RESEED), councilAddress, batchEncoded, block.number, msg.sender)
+        );
+
+        Proposal storage p = proposals[id];
+        require(p.startBlock == 0, "exists");
+
+        p.pType = ProposalType.COUNCIL_RESEED;
+        p.paramTarget = 0;
+        p.newValue = 0;
+        p.collectionAddress = councilAddress;
+        p.proposer = msg.sender;
+        p.startBlock = block.number;
+        p.endBlock = block.number + votingDurationBlocks;
+
+        proposalPayloads[id] = batchEncoded;
+
+        if (proposalIndex[id] == 0) {
+            proposalIds.push(id);
+            proposalIndex[id] = proposalIds.length;
+        }
+
+        emit ProposalCreated(id, ProposalType.COUNCIL_RESEED, 0, councilAddress, msg.sender, 0, p.startBlock, p.endBlock);
+        emit CouncilReseedProposed(id, councilAddress);
+    }
+
+    // -------------------------
+    // Vote
+    // -------------------------
+    function vote(bytes32 id, address attributedCollection) external {
+        (uint256 weight, address attr) = _votingWeight(msg.sender);
         if (weight == 0) revert Ineligible();
 
         Proposal storage p = proposals[id];
@@ -191,17 +288,25 @@ contract CatalystGovernanceUpgradeable is
         require(!p.executed, "executed");
         require(!hasVoted[id][msg.sender], "voted");
 
+        // use supplied attributedCollection if nonzero, otherwise use the staking-attributed collection
+        address usedAttr = attributedCollection;
+        if (usedAttr == address(0)) usedAttr = attr;
+
         uint256 cap = (minVotesRequiredScaled * collectionVoteCapPercent) / 100;
-        uint256 cur = proposalCollectionVotesScaled[id][attributedCollection];
+        uint256 cur = proposalCollectionVotesScaled[id][usedAttr];
         require(cur + weight <= cap, "cap exceeded");
 
         hasVoted[id][msg.sender] = true;
         p.votesScaled += weight;
-        proposalCollectionVotesScaled[id][attributedCollection] = cur + weight;
+        proposalCollectionVotesScaled[id][usedAttr] = cur + weight;
 
-        emit VoteCast(id, msg.sender, weight, attributedCollection);
+        emit VoteCast(id, msg.sender, weight, usedAttr);
     }
 
+    // -------------------------
+    // Execute
+    // -------------------------
+    /// @notice Execute passed proposal. For COUNCIL_RESEED it will call daoSeedActiveBatch on the council contract.
     function executeProposal(bytes32 id) external nonReentrant {
         Proposal storage p = proposals[id];
         require(p.startBlock != 0, "not found");
@@ -229,12 +334,41 @@ contract CatalystGovernanceUpgradeable is
             emit RegistrationFeeUpdated(old, p.newValue);
         } else if (p.pType == ProposalType.VOTING_PARAM) {
             uint8 t = p.paramTarget;
-            if (t == 0) { uint256 old = minVotesRequiredScaled; minVotesRequiredScaled = p.newValue; emit VotingParamUpdated(t, old, p.newValue); }
-            else if (t == 1) { uint256 old = votingDurationBlocks; votingDurationBlocks = p.newValue; emit VotingParamUpdated(t, old, p.newValue); }
-            else if (t == 2) { uint256 old = collectionVoteCapPercent; collectionVoteCapPercent = p.newValue; emit VotingParamUpdated(t, old, p.newValue); }
-            else revert BadParam();
+            if (t == 0) {
+                uint256 old = minVotesRequiredScaled;
+                minVotesRequiredScaled = p.newValue;
+                emit VotingParamUpdated(t, old, p.newValue);
+            } else if (t == 1) {
+                uint256 old = votingDurationBlocks;
+                votingDurationBlocks = p.newValue;
+                emit VotingParamUpdated(t, old, p.newValue);
+            } else if (t == 2) {
+                uint256 old = collectionVoteCapPercent;
+                collectionVoteCapPercent = p.newValue;
+                emit VotingParamUpdated(t, old, p.newValue);
+            } else revert BadParam();
         } else if (p.pType == ProposalType.TIER_UPGRADE) {
-            emit CollectionTierUpgraded(p.collectionAddress, 3); // 3 = BLUECHIP
+            // purely an event here; real tier upgrade must be enforced in staking contract by admin role
+            emit CollectionTierUpgraded(p.collectionAddress, uint8(2)); // 2 = BLUECHIP (example)
+        } else if (p.pType == ProposalType.COUNCIL_RESEED) {
+            // decode the stored payload and call daoSeedActiveBatch on the target council contract
+            bytes memory payload = proposalPayloads[id];
+            require(payload.length > 0, "payload missing");
+            address councilAddr = p.collectionAddress;
+            require(councilAddr != address(0), "council addr missing");
+
+            // decode address[7]
+            address[7] memory batch = abi.decode(payload, (address[7]));
+
+            // perform sanity check: no zero addresses
+            for (uint256 i = 0; i < 7; ++i) {
+                require(batch[i] != address(0), "zero in batch");
+            }
+
+            // call the council contract (DAO authority must be set on the BatchGuardianCouncil)
+            IBatchGuardianCouncil(councilAddr).daoSeedActiveBatch(batch);
+
+            emit CouncilReseedExecuted(id, councilAddr);
         } else {
             revert BadParam();
         }
@@ -245,23 +379,11 @@ contract CatalystGovernanceUpgradeable is
     // -------------------------
     // Info
     // -------------------------
-    function getProposalInfo(bytes32 id)
-        external
-        view
-        returns (
-            ProposalType pType,
-            uint8 paramTarget,
-            uint256 newValue,
-            address collectionAddress,
-            address proposer,
-            uint256 startBlock,
-            uint256 endBlock,
-            uint256 votesScaled,
-            bool executed
-        )
-    {
+    function getProposalInfo(bytes32 id) external view returns (ProposalInfo memory) {
         Proposal memory p = proposals[id];
-        return (
+        
+        // Return the struct instance
+        return ProposalInfo(
             p.pType,
             p.paramTarget,
             p.newValue,
@@ -270,17 +392,35 @@ contract CatalystGovernanceUpgradeable is
             p.startBlock,
             p.endBlock,
             p.votesScaled,
-            p.executed
+            p.executed,
+            proposalPayloads[id]
         );
     }
 
     // -------------------------
-    // Mocked voting weight
+    // Helpers for frontends
     // -------------------------
-    function _votingWeight(address voter) internal pure returns (uint256 weight, address attributedCollection) {
-        if (voter == address(0)) return (0, address(0));
-        // placeholder: everyone has equal weight
-        return (WEIGHT_SCALE, address(0));
+    /// @notice Encode a council batch (address[7]) for off-chain use
+    function encodeCouncilBatch(address[7] calldata batch) external pure returns (bytes memory) {
+        return abi.encode(batch);
+    }
+
+    /// @notice Decode previously-encoded council batch
+    function decodeCouncilBatch(bytes calldata data) external pure returns (address[7] memory batch) {
+        return abi.decode(data, (address[7]));
+    }
+
+    // -------------------------
+    // Voting weight (wired to staking)
+    // -------------------------
+    function _votingWeight(address voter) internal view returns (uint256 weight, address attributedCollection) {
+        if (address(staking) == address(0)) return (0, address(0));
+        // staking.votingWeight returns (weightScaled, attributedCollection)
+        try staking.votingWeight(voter) returns (uint256 w, address a) {
+            return (w, a);
+        } catch {
+            return (0, address(0));
+        }
     }
 
     // -------------------------
