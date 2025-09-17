@@ -4,33 +4,82 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-contract CataERC20Upgradeable is Initializable, ERC20Upgradeable, AccessControlUpgradeable {
-    bytes32 public constant DEFAULT_ADMIN_ROLE_BYTES = 0x00;
-    address public council; // BatchGuardianCouncil address
+/// @title CATA ERC20 Token (Upgradeable)
+/// @notice Recyclable capped token (1B max). Only CatalystStaking can mint.
+/// GuardianCouncil manages admin and upgrades.
+contract CataERC20Upgradeable is Initializable, ERC20Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+    // -------------------------
+    // Roles
+    // -------------------------
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
+    // -------------------------
+    // Supply caps
+    // -------------------------
+    uint256 public constant MAX_SUPPLY = 1_000_000_000 ether; // 1B CATA (18 decimals)
+
+    // -------------------------
+    // Council
+    // -------------------------
+    address public council; // BatchGuardianCouncil contract
+
+    // -------------------------
+    // Events
+    // -------------------------
     event AdminSwapped(address indexed oldAdmin, address indexed newAdmin);
     event CouncilSet(address indexed oldCouncil, address indexed newCouncil);
 
+    // -------------------------
+    // Modifiers
+    // -------------------------
     modifier onlyCouncil() {
-        require(msg.sender == council, "only council");
+        require(msg.sender == council, "CATA: only council");
         _;
     }
 
-    function initialize(string memory name_, string memory symbol_, address initialAdmin, address council_) external initializer {
+    // -------------------------
+    // Init
+    // -------------------------
+    function initialize(
+        string memory name_,
+        string memory symbol_,
+        address initialAdmin,
+        address council_
+    ) external initializer {
         __ERC20_init(name_, symbol_);
         __AccessControl_init();
+        __UUPSUpgradeable_init();
 
-        require(initialAdmin != address(0), "initial admin zero");
-        require(council_ != address(0), "council zero");
+        require(initialAdmin != address(0), "CATA: initial admin zero");
+        require(council_ != address(0), "CATA: council zero");
 
-        _grantRole(DEFAULT_ADMIN_ROLE_BYTES, initialAdmin);
+        _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
         council = council_;
     }
 
-    /// @notice set the council address (only DEFAULT_ADMIN_ROLE)
+    // -------------------------
+    // Mint & Burn
+    // -------------------------
+    /// @notice Mint new tokens (only CatalystStaking via MINTER_ROLE).
+    /// Enforces the 1B global supply cap.
+    function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) {
+        require(totalSupply() + amount <= MAX_SUPPLY, "CATA: cap exceeded");
+        _mint(to, amount);
+    }
+
+    /// @notice Burn tokens from caller.
+    function burn(uint256 amount) external {
+        _burn(msg.sender, amount);
+    }
+
+    // -------------------------
+    // Council Management
+    // -------------------------
+    /// @notice Set the council address (only DEFAULT_ADMIN_ROLE).
     function setCouncil(address newCouncil) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(newCouncil != address(0), "zero");
+        require(newCouncil != address(0), "CATA: zero council");
         address old = council;
         council = newCouncil;
         emit CouncilSet(old, newCouncil);
@@ -38,17 +87,23 @@ contract CataERC20Upgradeable is Initializable, ERC20Upgradeable, AccessControlU
 
     /// @notice Atomically grant new admin and revoke old admin. Called by the guardian council.
     function swapAdmin(address newAdmin, address oldAdmin) external onlyCouncil {
-        require(newAdmin != address(0), "zero new");
+        require(newAdmin != address(0), "CATA: zero new admin");
 
-        // grant first
-        if (!hasRole(DEFAULT_ADMIN_ROLE_BYTES, newAdmin)) {
-            _grantRole(DEFAULT_ADMIN_ROLE_BYTES, newAdmin);
+        // grant new first
+        if (!hasRole(DEFAULT_ADMIN_ROLE, newAdmin)) {
+            _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         }
-        // revoke second
-        if (oldAdmin != address(0) && hasRole(DEFAULT_ADMIN_ROLE_BYTES, oldAdmin)) {
-            _revokeRole(DEFAULT_ADMIN_ROLE_BYTES, oldAdmin);
+
+        // revoke old second
+        if (oldAdmin != address(0) && hasRole(DEFAULT_ADMIN_ROLE, oldAdmin)) {
+            _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
         }
 
         emit AdminSwapped(oldAdmin, newAdmin);
     }
+
+    // -------------------------
+    // UUPS Upgrade
+    // -------------------------
+    function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }
