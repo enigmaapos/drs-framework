@@ -9,6 +9,18 @@ pragma solidity ^0.8.20;
   - Recovery proposals carry (callTarget, callData) executed atomically
   - 5/7 threshold; 6/7 => warning + last-honest veto; 7/7 => lock + auto-activate standby
   - Last-honest guardian gets 48h veto to halt & promote standby
+
+  IMPORTANT SAFETY NOTE
+  ---------------------
+  The council executes *exact calldata* supplied in each recovery proposal.
+  It does not contain logic for granting/revoking roles itself.
+
+  Always ensure proposals follow a safe atomic pattern:
+  - Grant new admin/role FIRST
+  - Revoke old admin/role SECOND
+  - Both inside one call (e.g., swapAdmin or multicall in target contract)
+
+  If you propose raw grant/revoke calls separately, it is unsafe.
 */
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -33,37 +45,36 @@ contract BatchGuardianCouncilUpgradeable is
     // -------- Roles / Authority --------
     bytes32 public constant DAO_ROLE = keccak256("DAO_ROLE");
 
-    // The DAO address is also set as DEFAULT_ADMIN_ROLE in AccessControl
     address public dao;
 
     // -------- Batches --------
-    address[GUARDIAN_COUNT] public activeGuardians;   // Batch-1
-    address[GUARDIAN_COUNT] public standbyGuardians;  // Batch-2
+    address[GUARDIAN_COUNT] public activeGuardians;
+    address[GUARDIAN_COUNT] public standbyGuardians;
 
     mapping(address => bool) public isActiveGuardian;
     mapping(address => bool) public isStandbyGuardian;
 
-    // -------- Lock / Compromise flags --------
-    bool public locked;   // when true, only DAO can reseed/rotate
-    bool public warning;  // set when 6/7 approvals seen in any proposal
+    // -------- Flags --------
+    bool public locked;
+    bool public warning;
 
-    // -------- Recovery proposals (generic) --------
+    // -------- Recovery --------
     enum RecovKind { DEPLOYER, ADMIN }
 
     struct RecoveryRequest {
-        address proposed;     // human-readable "new" address (optional)
+        address proposed;
         uint8 approvals;
         uint256 deadline;
         bool executed;
-        address callTarget;   // target contract to call when executing
-        bytes callData;       // exact calldata to perform atomic swap (grant->revoke) or other admin op
-        mapping(address => bool) hasApproved; // active guardian approvals
+        address callTarget;
+        bytes callData;
+        mapping(address => bool) hasApproved;
     }
 
     RecoveryRequest private _deployerRecovery;
     RecoveryRequest private _adminRecovery;
 
-    // -------- Last-honest veto --------
+    // -------- Last-Honest Veto --------
     struct TempVeto {
         address guardian;
         uint256 expiry;
@@ -72,23 +83,19 @@ contract BatchGuardianCouncilUpgradeable is
 
     // -------- Events --------
     event DaoChanged(address indexed oldDao, address indexed newDao);
-
     event ActiveBatchSeeded(address[GUARDIAN_COUNT] guardians);
     event StandbyBatchSeeded(address[GUARDIAN_COUNT] guardians);
     event StandbyActivated(address[GUARDIAN_COUNT] newActive);
-
     event WarningRaised(RecovKind kind, uint8 approvals);
     event AutoLocked(RecovKind kind);
-
     event RecoveryProposed(RecovKind kind, address indexed proposer, address proposed, address callTarget, uint256 deadline);
     event RecoveryApproved(RecovKind kind, address indexed guardian, uint8 approvals);
     event RecoveryExecuted(RecovKind kind, address indexed proposed, address callTarget);
     event RecoveryFailed(RecovKind kind, address indexed proposer, address callTarget, bytes returnData);
-
     event LastHonestAssigned(address indexed guardian, uint256 expiry);
     event LastHonestHalted(address indexed guardian, RecovKind kind);
 
-    // -------- Errors (short) --------
+    // -------- Errors --------
     error Unauthorized();
     error ZeroAddress();
     error LockedErr();
@@ -115,7 +122,7 @@ contract BatchGuardianCouncilUpgradeable is
         _;
     }
 
-    // -------- Initializer (replaces constructor) --------
+    // -------- Init --------
     function initialize(
         address dao_,
         address[GUARDIAN_COUNT] memory batchActive,
@@ -128,59 +135,47 @@ contract BatchGuardianCouncilUpgradeable is
 
         if (dao_ == address(0)) revert ZeroAddress();
 
-        // set DAO roles
         _grantRole(DEFAULT_ADMIN_ROLE, dao_);
         _grantRole(DAO_ROLE, dao_);
         dao = dao_;
 
-        // seed batches
         _seedActiveBatch(batchActive);
         _seedStandbyBatch(batchStandby);
 
-        // initial flags
         locked = false;
         warning = false;
         tempVeto.guardian = address(0);
         tempVeto.expiry = 0;
     }
 
-    // -------- UUPS authorization (DAO as admin) --------
     function _authorizeUpgrade(address) internal override onlyDAO {}
 
-    // ============================
-    //  DAO Controls (reseeding)
-    // ============================
+    // -------- DAO Controls --------
     function setDAO(address newDAO) external onlyDAO {
         if (newDAO == address(0)) revert ZeroAddress();
         address old = dao;
-        // grant roles to new DAO and revoke from old
         _grantRole(DEFAULT_ADMIN_ROLE, newDAO);
         _grantRole(DAO_ROLE, newDAO);
         _revokeRole(DAO_ROLE, dao);
         _revokeRole(DEFAULT_ADMIN_ROLE, dao);
-
         dao = newDAO;
         emit DaoChanged(old, newDAO);
     }
 
-    /// @notice DAO can fully reseed the active batch (even when locked).
     function daoSeedActiveBatch(address[GUARDIAN_COUNT] calldata batch) external onlyDAO {
         _clearActive();
         _seedActiveBatch(batch);
     }
 
-    /// @notice DAO can fully reseed the standby batch (even when locked).
     function daoSeedStandbyBatch(address[GUARDIAN_COUNT] calldata batch) external onlyDAO {
         _clearStandby();
         _seedStandbyBatch(batch);
     }
 
-    /// @notice DAO can manually activate the standby batch into active, then clear standby.
     function daoActivateStandby() external onlyDAO {
         _activateStandby();
     }
 
-    /// @notice DAO can clear lock & warning after recovery and reseeding are completed.
     function daoClearLockAndWarning() external onlyDAO {
         locked = false;
         warning = false;
@@ -188,14 +183,7 @@ contract BatchGuardianCouncilUpgradeable is
         tempVeto.expiry = 0;
     }
 
-    // ==================================================
-    //  Recovery proposals (Active guardians only)
-    //  propose includes callTarget+callData to be executed
-    //  callData should be crafted to perform atomic swap (grant then revoke)
-    // ==================================================
-
-    /// @notice Propose a recovery. `callTarget` and `callData` define the exact atomic action executed.
-    /// `proposed` is optional helper (e.g., new admin address) for UX and logs.
+    // -------- Recovery Proposals --------
     function proposeRecovery(
         RecovKind kind,
         address proposed,
@@ -212,7 +200,6 @@ contract BatchGuardianCouncilUpgradeable is
         emit RecoveryProposed(kind, msg.sender, proposed, callTarget, R.deadline);
     }
 
-    /// @notice Approve the active recovery (active guardians only).
     function approveRecovery(RecovKind kind) external notLocked onlyActiveG whenNotPaused {
         RecoveryRequest storage R = _getReq(kind);
         if (R.callTarget == address(0)) revert NoActiveRequest();
@@ -223,10 +210,9 @@ contract BatchGuardianCouncilUpgradeable is
         R.hasApproved[msg.sender] = true;
         R.approvals += 1;
 
-        // If approvals reach GUARDIAN_COUNT - 1 (6 of 7) assign last honest veto
         if (R.approvals == GUARDIAN_COUNT - 1) {
-            address last = address(0);
-            for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+            address last;
+            for (uint256 i; i < GUARDIAN_COUNT; ++i) {
                 address g = activeGuardians[i];
                 if (!R.hasApproved[g]) {
                     last = g;
@@ -247,9 +233,7 @@ contract BatchGuardianCouncilUpgradeable is
         if (R.approvals == 7 && !locked) {
             locked = true;
             emit AutoLocked(kind);
-            // auto-activate standby to guarantee liveness
             _activateStandby();
-            // clear temp veto if any
             tempVeto.guardian = address(0);
             tempVeto.expiry = 0;
         }
@@ -257,7 +241,6 @@ contract BatchGuardianCouncilUpgradeable is
         emit RecoveryApproved(kind, msg.sender, R.approvals);
     }
 
-    /// @notice Execute the active recovery once threshold met. The council will perform the exact `callTarget.call(callData)`.
     function executeRecovery(RecovKind kind) external nonReentrant whenNotPaused {
         RecoveryRequest storage R = _getReq(kind);
         if (R.callTarget == address(0)) revert NoActiveRequest();
@@ -265,25 +248,18 @@ contract BatchGuardianCouncilUpgradeable is
         if (block.timestamp > R.deadline) revert RequestExpired();
         if (R.approvals < THRESHOLD) revert ThresholdNotMet();
 
-        // Execute the provided calldata on the callTarget (atomic)
         (bool ok, bytes memory ret) = R.callTarget.call(R.callData);
         if (!ok) {
-            // emit failure with return data for off-chain debugging
             emit RecoveryFailed(kind, R.proposed, R.callTarget, ret);
             revert("recovery call failed");
         }
 
         R.executed = true;
-        // clear any temp veto (not needed after success)
         tempVeto.guardian = address(0);
         tempVeto.expiry = 0;
         emit RecoveryExecuted(kind, R.proposed, R.callTarget);
     }
 
-    // ========================
-    //  Last-Honest Halt & Promote (fast path)
-    // ========================
-    /// @notice The guardian assigned the temp veto can halt the recovery and promote standby immediately.
     function lastHonestHaltAndPromote(RecovKind kind) external whenNotPaused onlyActiveG {
         if (tempVeto.guardian == address(0)) revert("no temp veto");
         if (msg.sender != tempVeto.guardian) revert("not last honest");
@@ -293,38 +269,28 @@ contract BatchGuardianCouncilUpgradeable is
         if (R.callTarget == address(0)) revert NoActiveRequest();
         if (R.executed) revert AlreadyApproved();
         if (block.timestamp > R.deadline) revert RequestExpired();
-
-        // verify approvals still equal GUARDIAN_COUNT - 1 for safety
         if (R.approvals != GUARDIAN_COUNT - 1) revert("approvals changed");
 
-        // cancel request
         R.callTarget = address(0);
-        R.callData = bytes("");
+        R.callData = "";
         R.proposed = address(0);
         R.approvals = 0;
         R.deadline = 0;
         R.executed = false;
 
-        // clear temp veto
         tempVeto.guardian = address(0);
         tempVeto.expiry = 0;
 
-        // promote standby to active immediately
         _activateStandby();
-
         emit LastHonestHalted(msg.sender, kind);
     }
 
-    // ========================
-    //  Auto-Activation Path
-    // ========================
-    /// @notice Anyone can trigger auto-activation of standby when locked to maintain liveness.
     function activateStandbyIfLocked() external {
         if (!locked) revert LockedErr();
         _activateStandby();
     }
 
-    // ======== Views ========
+    // -------- Views --------
     function getActiveGuardians() external view returns (address[GUARDIAN_COUNT] memory) {
         return activeGuardians;
     }
@@ -346,10 +312,9 @@ contract BatchGuardianCouncilUpgradeable is
         return (tempVeto.guardian, tempVeto.expiry);
     }
 
-    // ======== Internal Helpers ========
+    // -------- Internals --------
     function _getReq(RecovKind kind) internal view returns (RecoveryRequest storage) {
-        if (kind == RecovKind.DEPLOYER) return _deployerRecovery;
-        return _adminRecovery;
+        return kind == RecovKind.DEPLOYER ? _deployerRecovery : _adminRecovery;
     }
 
     function _resetReq(RecoveryRequest storage R, address proposed) internal {
@@ -358,15 +323,13 @@ contract BatchGuardianCouncilUpgradeable is
         R.deadline = block.timestamp + RECOVERY_WINDOW;
         R.executed = false;
         R.callTarget = address(0);
-        R.callData = bytes("");
-        // clear temp veto when a new request starts
+        R.callData = "";
         tempVeto.guardian = address(0);
         tempVeto.expiry = 0;
-        // NOTE: We don't iterate to clear `hasApproved` mapping for gas reasons.
     }
 
     function _seedActiveBatch(address[GUARDIAN_COUNT] memory batch) internal {
-        for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+        for (uint256 i; i < GUARDIAN_COUNT; ++i) {
             address g = batch[i];
             if (g == address(0)) revert ZeroAddress();
             activeGuardians[i] = g;
@@ -376,7 +339,7 @@ contract BatchGuardianCouncilUpgradeable is
     }
 
     function _seedStandbyBatch(address[GUARDIAN_COUNT] memory batch) internal {
-        for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+        for (uint256 i; i < GUARDIAN_COUNT; ++i) {
             address g = batch[i];
             if (g == address(0)) revert ZeroAddress();
             standbyGuardians[i] = g;
@@ -386,7 +349,7 @@ contract BatchGuardianCouncilUpgradeable is
     }
 
     function _clearActive() internal {
-        for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+        for (uint256 i; i < GUARDIAN_COUNT; ++i) {
             address g = activeGuardians[i];
             if (g != address(0)) isActiveGuardian[g] = false;
             activeGuardians[i] = address(0);
@@ -394,7 +357,7 @@ contract BatchGuardianCouncilUpgradeable is
     }
 
     function _clearStandby() internal {
-        for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+        for (uint256 i; i < GUARDIAN_COUNT; ++i) {
             address g = standbyGuardians[i];
             if (g != address(0)) isStandbyGuardian[g] = false;
             standbyGuardians[i] = address(0);
@@ -403,7 +366,7 @@ contract BatchGuardianCouncilUpgradeable is
 
     function _activateStandby() internal {
         _clearActive();
-        for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+        for (uint256 i; i < GUARDIAN_COUNT; ++i) {
             address g = standbyGuardians[i];
             require(g != address(0), "standby not seeded");
             activeGuardians[i] = g;
@@ -414,6 +377,5 @@ contract BatchGuardianCouncilUpgradeable is
         emit StandbyActivated(activeGuardians);
     }
 
-    // -------- UUPS gap (reserve) --------
     uint256[45] private __gap;
 }
