@@ -42,6 +42,7 @@ contract CatalystGovernanceUpgradeable is
 
     event AdminSwapped(address indexed oldAdmin, address indexed newAdmin);
     event CouncilSet(address indexed oldCouncil, address indexed newCouncil);
+    event GuardianCouncilUpdated(address indexed oldCouncil, address indexed newCouncil);
 
     modifier onlyCouncil() {
         require(msg.sender == council, "only council");
@@ -159,15 +160,13 @@ contract CatalystGovernanceUpgradeable is
     // -------------------------
     // Init
     // -------------------------
-    /// @param admin initial admin (DEFAULT_ADMIN_ROLE & CONTRACT_ADMIN_ROLE)
-    /// @param council_ initial batch guardian council contract address
+    /// @param guardianCouncil_ initial batch guardian council contract address (becomes DEFAULT_ADMIN_ROLE & CONTRACT_ADMIN_ROLE)
     /// @param staking_ CatalystStaking contract address (used to query voting weight)
     /// @param votingDuration voting length in blocks
     /// @param minVotes scaled minimum votes required (scale = WEIGHT_SCALE)
     /// @param capPercent collection cap percent (0..100)
     function initialize(
-        address admin,
-        address council_,
+        address guardianCouncil_,
         address staking_,
         uint256 votingDuration,
         uint256 minVotes,
@@ -177,13 +176,14 @@ contract CatalystGovernanceUpgradeable is
         __UUPSUpgradeable_init();
         __ReentrancyGuard_init();
 
-        require(admin != address(0) && council_ != address(0) && staking_ != address(0), "zero address");
+        require(guardianCouncil_ != address(0) && staking_ != address(0), "zero address");
         require(capPercent <= 100, "cap>100");
 
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(CONTRACT_ADMIN_ROLE, admin);
+        // Guardian Council contract becomes the administrative authority for Catalyst
+        _grantRole(DEFAULT_ADMIN_ROLE, guardianCouncil_);
+        _grantRole(CONTRACT_ADMIN_ROLE, guardianCouncil_);
 
-        council = council_;
+        council = guardianCouncil_;
         staking = ICatalystStaking(staking_);
         votingDurationBlocks = votingDuration;
         minVotesRequiredScaled = minVotes;
@@ -191,6 +191,34 @@ contract CatalystGovernanceUpgradeable is
 
         maxBaseRewardRate = 1e18;
         minStakeAgeForVoting = 0;
+    }
+
+    // -------------------------
+    // Allow the council to update/rotate the guardian contract (role transfer)
+    // -------------------------
+    /// @notice Update the guardian council address (transfers DEFAULT_ADMIN_ROLE & CONTRACT_ADMIN_ROLE)
+    function updateGuardianCouncil(address newCouncil) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newCouncil != address(0), "zero");
+        address old = council;
+        council = newCouncil;
+
+        // grant roles to new council then revoke from old to avoid losing admin
+        if (!hasRole(DEFAULT_ADMIN_ROLE, newCouncil)) {
+            _grantRole(DEFAULT_ADMIN_ROLE, newCouncil);
+        }
+        if (!hasRole(CONTRACT_ADMIN_ROLE, newCouncil)) {
+            _grantRole(CONTRACT_ADMIN_ROLE, newCouncil);
+        }
+
+        if (old != address(0) && hasRole(DEFAULT_ADMIN_ROLE, old)) {
+            _revokeRole(DEFAULT_ADMIN_ROLE, old);
+        }
+        if (old != address(0) && hasRole(CONTRACT_ADMIN_ROLE, old)) {
+            _revokeRole(CONTRACT_ADMIN_ROLE, old);
+        }
+
+        emit GuardianCouncilUpdated(old, newCouncil);
+        emit CouncilSet(old, newCouncil);
     }
 
     // -------------------------
