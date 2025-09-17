@@ -9,6 +9,12 @@ import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.
 /// @notice Minimal interface for BatchGuardianCouncil (reseeding)
 interface IBatchGuardianCouncil {
     function daoSeedActiveBatch(address[7] calldata batch) external;
+    function daoProposeSeedStandbyBatch(address[7] calldata batch) external;
+    function daoCommitSeedStandbyBatch() external;
+    function daoActivateStandby() external;
+    function proposeNewDAO(address newDAO) external;
+    function commitNewDAO() external;
+    function daoClearLockAndWarning() external;
 }
 
 /// @notice Minimal interface for CatalystStaking (for governance weights)
@@ -79,7 +85,13 @@ contract CatalystGovernanceUpgradeable is
         REGISTRATION_FEE_FALLBACK,
         VOTING_PARAM,
         TIER_UPGRADE,
-        COUNCIL_RESEED
+        COUNCIL_RESEED_ACTIVE,
+        COUNCIL_PROPOSE_STANDBY,
+        COUNCIL_COMMIT_STANDBY,
+        COUNCIL_ACTIVATE_STANDBY,
+        COUNCIL_PROPOSE_NEW_DAO,
+        COUNCIL_COMMIT_NEW_DAO,
+        COUNCIL_CLEAR_LOCK
     }
 
     mapping(bytes32 => Proposal) public proposals;
@@ -129,6 +141,7 @@ contract CatalystGovernanceUpgradeable is
     // --- Errors ---
     error Ineligible();
     error BadParam();
+    error ZeroAddress();
 
     // -------------------------
     // Init
@@ -197,15 +210,15 @@ contract CatalystGovernanceUpgradeable is
     // -------------------------
     // Propose (generic)
     // -------------------------
-    /// @notice Create a generic proposal (non-reseed). Caller must have voting weight > 0.
+    /// @notice Create a generic proposal.
     function propose(
         ProposalType pType,
         uint8 paramTarget,
         uint256 newValue,
         address collectionContext
     ) external returns (bytes32 id) {
-        // only allow non-COUNCIL_RESEED here; specialized function exists below
-        require(pType != ProposalType.COUNCIL_RESEED, "use proposeCouncilReseed");
+        // Only allow generic proposals here.
+        require(pType <= ProposalType.TIER_UPGRADE, "use specialized propose func");
 
         (uint256 weight,) = _votingWeight(msg.sender);
         if (weight == 0) revert Ineligible();
@@ -232,34 +245,28 @@ contract CatalystGovernanceUpgradeable is
         emit ProposalCreated(id, pType, paramTarget, collectionContext, msg.sender, newValue, p.startBlock, p.endBlock);
     }
 
-    /// @notice Specialized proposer for council reseed. Stores the 7-address batch in proposalPayloads.
-    /// - rejects any zero address in the batch.
-    function proposeCouncilReseed(address councilAddress, address[7] calldata newBatch)
-        external
-        returns (bytes32 id)
-    {
-        if (councilAddress == address(0)) revert BadParam();
+    /// @notice Specialized proposer for council reseed active batch.
+    function proposeCouncilReseedActive(address[7] calldata newBatch) external returns (bytes32 id) {
+        if (council == address(0)) revert ZeroAddress();
         (uint256 weight,) = _votingWeight(msg.sender);
         if (weight == 0) revert Ineligible();
 
-        // validate nonzero batch
         for (uint256 i = 0; i < 7; ++i) {
             if (newBatch[i] == address(0)) revert BadParam();
         }
 
-        // create deterministic id that includes the encoded batch bytes
         bytes memory batchEncoded = abi.encode(newBatch);
         id = keccak256(
-            abi.encodePacked(uint256(ProposalType.COUNCIL_RESEED), councilAddress, batchEncoded, block.number, msg.sender)
+            abi.encodePacked(uint256(ProposalType.COUNCIL_RESEED_ACTIVE), council, batchEncoded, block.number, msg.sender)
         );
 
         Proposal storage p = proposals[id];
         require(p.startBlock == 0, "exists");
 
-        p.pType = ProposalType.COUNCIL_RESEED;
+        p.pType = ProposalType.COUNCIL_RESEED_ACTIVE;
         p.paramTarget = 0;
         p.newValue = 0;
-        p.collectionAddress = councilAddress;
+        p.collectionAddress = council;
         p.proposer = msg.sender;
         p.startBlock = block.number;
         p.endBlock = block.number + votingDurationBlocks;
@@ -271,8 +278,186 @@ contract CatalystGovernanceUpgradeable is
             proposalIndex[id] = proposalIds.length;
         }
 
-        emit ProposalCreated(id, ProposalType.COUNCIL_RESEED, 0, councilAddress, msg.sender, 0, p.startBlock, p.endBlock);
-        emit CouncilReseedProposed(id, councilAddress);
+        emit ProposalCreated(id, ProposalType.COUNCIL_RESEED_ACTIVE, 0, council, msg.sender, 0, p.startBlock, p.endBlock);
+        emit CouncilReseedProposed(id, council);
+    }
+
+    /// @notice Specialized proposer for proposing a standby batch reseed.
+    function proposeCouncilReseedStandby(address[7] calldata newBatch) external returns (bytes32 id) {
+        if (council == address(0)) revert ZeroAddress();
+        (uint256 weight,) = _votingWeight(msg.sender);
+        if (weight == 0) revert Ineligible();
+
+        for (uint256 i = 0; i < 7; ++i) {
+            if (newBatch[i] == address(0)) revert BadParam();
+        }
+
+        bytes memory batchEncoded = abi.encode(newBatch);
+        id = keccak256(
+            abi.encodePacked(uint256(ProposalType.COUNCIL_PROPOSE_STANDBY), council, batchEncoded, block.number, msg.sender)
+        );
+
+        Proposal storage p = proposals[id];
+        require(p.startBlock == 0, "exists");
+
+        p.pType = ProposalType.COUNCIL_PROPOSE_STANDBY;
+        p.paramTarget = 0;
+        p.newValue = 0;
+        p.collectionAddress = council;
+        p.proposer = msg.sender;
+        p.startBlock = block.number;
+        p.endBlock = block.number + votingDurationBlocks;
+
+        proposalPayloads[id] = batchEncoded;
+
+        if (proposalIndex[id] == 0) {
+            proposalIds.push(id);
+            proposalIndex[id] = proposalIds.length;
+        }
+
+        emit ProposalCreated(id, ProposalType.COUNCIL_PROPOSE_STANDBY, 0, council, msg.sender, 0, p.startBlock, p.endBlock);
+    }
+    
+    /// @notice Specialized proposer for proposing to commit a pending standby batch.
+    function proposeCouncilCommitStandby() external returns (bytes32 id) {
+        if (council == address(0)) revert ZeroAddress();
+        (uint256 weight,) = _votingWeight(msg.sender);
+        if (weight == 0) revert Ineligible();
+
+        id = keccak256(
+            abi.encodePacked(uint256(ProposalType.COUNCIL_COMMIT_STANDBY), council, block.number, msg.sender)
+        );
+        Proposal storage p = proposals[id];
+        require(p.startBlock == 0, "exists");
+
+        p.pType = ProposalType.COUNCIL_COMMIT_STANDBY;
+        p.paramTarget = 0;
+        p.newValue = 0;
+        p.collectionAddress = council;
+        p.proposer = msg.sender;
+        p.startBlock = block.number;
+        p.endBlock = block.number + votingDurationBlocks;
+
+        if (proposalIndex[id] == 0) {
+            proposalIds.push(id);
+            proposalIndex[id] = proposalIds.length;
+        }
+
+        emit ProposalCreated(id, ProposalType.COUNCIL_COMMIT_STANDBY, 0, council, msg.sender, 0, p.startBlock, p.endBlock);
+    }
+    
+    /// @notice Specialized proposer for proposing to activate the standby batch.
+    function proposeCouncilActivateStandby() external returns (bytes32 id) {
+        if (council == address(0)) revert ZeroAddress();
+        (uint256 weight,) = _votingWeight(msg.sender);
+        if (weight == 0) revert Ineligible();
+
+        id = keccak256(
+            abi.encodePacked(uint256(ProposalType.COUNCIL_ACTIVATE_STANDBY), council, block.number, msg.sender)
+        );
+        Proposal storage p = proposals[id];
+        require(p.startBlock == 0, "exists");
+
+        p.pType = ProposalType.COUNCIL_ACTIVATE_STANDBY;
+        p.paramTarget = 0;
+        p.newValue = 0;
+        p.collectionAddress = council;
+        p.proposer = msg.sender;
+        p.startBlock = block.number;
+        p.endBlock = block.number + votingDurationBlocks;
+
+        if (proposalIndex[id] == 0) {
+            proposalIds.push(id);
+            proposalIndex[id] = proposalIds.length;
+        }
+
+        emit ProposalCreated(id, ProposalType.COUNCIL_ACTIVATE_STANDBY, 0, council, msg.sender, 0, p.startBlock, p.endBlock);
+    }
+
+    /// @notice Specialized proposer for proposing a new DAO for the council.
+    function proposeCouncilNewDAO(address newDAO) external returns (bytes32 id) {
+        if (council == address(0) || newDAO == address(0)) revert ZeroAddress();
+        (uint256 weight,) = _votingWeight(msg.sender);
+        if (weight == 0) revert Ineligible();
+
+        bytes memory daoEncoded = abi.encode(newDAO);
+        id = keccak256(
+            abi.encodePacked(uint256(ProposalType.COUNCIL_PROPOSE_NEW_DAO), council, daoEncoded, block.number, msg.sender)
+        );
+        Proposal storage p = proposals[id];
+        require(p.startBlock == 0, "exists");
+
+        p.pType = ProposalType.COUNCIL_PROPOSE_NEW_DAO;
+        p.paramTarget = 0;
+        p.newValue = 0;
+        p.collectionAddress = council;
+        p.proposer = msg.sender;
+        p.startBlock = block.number;
+        p.endBlock = block.number + votingDurationBlocks;
+        proposalPayloads[id] = daoEncoded;
+
+        if (proposalIndex[id] == 0) {
+            proposalIds.push(id);
+            proposalIndex[id] = proposalIds.length;
+        }
+
+        emit ProposalCreated(id, ProposalType.COUNCIL_PROPOSE_NEW_DAO, 0, council, msg.sender, 0, p.startBlock, p.endBlock);
+    }
+    
+    /// @notice Specialized proposer for proposing to commit the new DAO.
+    function proposeCouncilCommitNewDAO() external returns (bytes32 id) {
+        if (council == address(0)) revert ZeroAddress();
+        (uint256 weight,) = _votingWeight(msg.sender);
+        if (weight == 0) revert Ineligible();
+
+        id = keccak256(
+            abi.encodePacked(uint256(ProposalType.COUNCIL_COMMIT_NEW_DAO), council, block.number, msg.sender)
+        );
+        Proposal storage p = proposals[id];
+        require(p.startBlock == 0, "exists");
+
+        p.pType = ProposalType.COUNCIL_COMMIT_NEW_DAO;
+        p.paramTarget = 0;
+        p.newValue = 0;
+        p.collectionAddress = council;
+        p.proposer = msg.sender;
+        p.startBlock = block.number;
+        p.endBlock = block.number + votingDurationBlocks;
+
+        if (proposalIndex[id] == 0) {
+            proposalIds.push(id);
+            proposalIndex[id] = proposalIds.length;
+        }
+
+        emit ProposalCreated(id, ProposalType.COUNCIL_COMMIT_NEW_DAO, 0, council, msg.sender, 0, p.startBlock, p.endBlock);
+    }
+
+    /// @notice Specialized proposer for proposing to clear a lock on the council contract.
+    function proposeCouncilClearLock() external returns (bytes32 id) {
+        if (council == address(0)) revert ZeroAddress();
+        (uint256 weight,) = _votingWeight(msg.sender);
+        if (weight == 0) revert Ineligible();
+
+        id = keccak256(
+            abi.encodePacked(uint256(ProposalType.COUNCIL_CLEAR_LOCK), council, block.number, msg.sender)
+        );
+        Proposal storage p = proposals[id];
+        require(p.startBlock == 0, "exists");
+
+        p.pType = ProposalType.COUNCIL_CLEAR_LOCK;
+        p.paramTarget = 0;
+        p.newValue = 0;
+        p.collectionAddress = council;
+        p.proposer = msg.sender;
+        p.startBlock = block.number;
+        p.endBlock = block.number + votingDurationBlocks;
+
+        if (proposalIndex[id] == 0) {
+            proposalIds.push(id);
+            proposalIndex[id] = proposalIds.length;
+        }
+
+        emit ProposalCreated(id, ProposalType.COUNCIL_CLEAR_LOCK, 0, council, msg.sender, 0, p.startBlock, p.endBlock);
     }
 
     // -------------------------
@@ -306,7 +491,7 @@ contract CatalystGovernanceUpgradeable is
     // -------------------------
     // Execute
     // -------------------------
-    /// @notice Execute passed proposal. For COUNCIL_RESEED it will call daoSeedActiveBatch on the council contract.
+    /// @notice Execute passed proposal.
     function executeProposal(bytes32 id) external nonReentrant {
         Proposal storage p = proposals[id];
         require(p.startBlock != 0, "not found");
@@ -348,27 +533,38 @@ contract CatalystGovernanceUpgradeable is
                 emit VotingParamUpdated(t, old, p.newValue);
             } else revert BadParam();
         } else if (p.pType == ProposalType.TIER_UPGRADE) {
-            // purely an event here; real tier upgrade must be enforced in staking contract by admin role
-            emit CollectionTierUpgraded(p.collectionAddress, uint8(2)); // 2 = BLUECHIP (example)
-        } else if (p.pType == ProposalType.COUNCIL_RESEED) {
-            // decode the stored payload and call daoSeedActiveBatch on the target council contract
+            emit CollectionTierUpgraded(p.collectionAddress, uint8(2));
+        } else if (p.pType == ProposalType.COUNCIL_RESEED_ACTIVE) {
             bytes memory payload = proposalPayloads[id];
             require(payload.length > 0, "payload missing");
-            address councilAddr = p.collectionAddress;
-            require(councilAddr != address(0), "council addr missing");
-
-            // decode address[7]
             address[7] memory batch = abi.decode(payload, (address[7]));
-
-            // perform sanity check: no zero addresses
             for (uint256 i = 0; i < 7; ++i) {
                 require(batch[i] != address(0), "zero in batch");
             }
-
-            // call the council contract (DAO authority must be set on the BatchGuardianCouncil)
-            IBatchGuardianCouncil(councilAddr).daoSeedActiveBatch(batch);
-
-            emit CouncilReseedExecuted(id, councilAddr);
+            IBatchGuardianCouncil(council).daoSeedActiveBatch(batch);
+            emit CouncilReseedExecuted(id, council);
+        } else if (p.pType == ProposalType.COUNCIL_PROPOSE_STANDBY) {
+            bytes memory payload = proposalPayloads[id];
+            require(payload.length > 0, "payload missing");
+            address[7] memory batch = abi.decode(payload, (address[7]));
+            for (uint256 i = 0; i < 7; ++i) {
+                require(batch[i] != address(0), "zero in batch");
+            }
+            IBatchGuardianCouncil(council).daoProposeSeedStandbyBatch(batch);
+        } else if (p.pType == ProposalType.COUNCIL_COMMIT_STANDBY) {
+            IBatchGuardianCouncil(council).daoCommitSeedStandbyBatch();
+        } else if (p.pType == ProposalType.COUNCIL_ACTIVATE_STANDBY) {
+            IBatchGuardianCouncil(council).daoActivateStandby();
+        } else if (p.pType == ProposalType.COUNCIL_PROPOSE_NEW_DAO) {
+            bytes memory payload = proposalPayloads[id];
+            require(payload.length > 0, "payload missing");
+            address newDAO = abi.decode(payload, (address));
+            require(newDAO != address(0), "zero address");
+            IBatchGuardianCouncil(council).proposeNewDAO(newDAO);
+        } else if (p.pType == ProposalType.COUNCIL_COMMIT_NEW_DAO) {
+            IBatchGuardianCouncil(council).commitNewDAO();
+        } else if (p.pType == ProposalType.COUNCIL_CLEAR_LOCK) {
+            IBatchGuardianCouncil(council).daoClearLockAndWarning();
         } else {
             revert BadParam();
         }
@@ -382,7 +578,6 @@ contract CatalystGovernanceUpgradeable is
     function getProposalInfo(bytes32 id) external view returns (ProposalInfo memory) {
         Proposal memory p = proposals[id];
         
-        // Return the struct instance
         return ProposalInfo(
             p.pType,
             p.paramTarget,
@@ -415,7 +610,6 @@ contract CatalystGovernanceUpgradeable is
     // -------------------------
     function _votingWeight(address voter) internal view returns (uint256 weight, address attributedCollection) {
         if (address(staking) == address(0)) return (0, address(0));
-        // staking.votingWeight returns (weightScaled, attributedCollection)
         try staking.votingWeight(voter) returns (uint256 w, address a) {
             return (w, a);
         } catch {
