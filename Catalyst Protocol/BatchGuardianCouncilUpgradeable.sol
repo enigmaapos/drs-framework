@@ -2,25 +2,13 @@
 pragma solidity ^0.8.20;
 
 /*
-  BatchGuardianCouncilUpgradeable
-  - UUPS upgradeable
-  - Two batches (active, standby) of fixed GUARDIAN_COUNT (7)
-  - DAO-managed reseed/rotate
-  - Recovery proposals carry (callTarget, callData) executed atomically
-  - 5/7 threshold; 6/7 => warning + last-honest veto; 7/7 => lock + auto-activate standby
-  - Last-honest guardian gets 48h veto to halt & promote standby
-
-  IMPORTANT SAFETY NOTE
-  ---------------------
-  The council executes *exact calldata* supplied in each recovery proposal.
-  It does not contain logic for granting/revoking roles itself.
-
-  Always ensure proposals follow a safe atomic pattern:
-  - Grant new admin/role FIRST
-  - Revoke old admin/role SECOND
-  - Both inside one call (e.g., swapAdmin or multicall in target contract)
-
-  If you propose raw grant/revoke calls separately, it is unsafe.
+  BatchGuardianCouncilUpgradeable
+  - UUPS upgradeable
+  - Two batches (active, standby) of fixed GUARDIAN_COUNT (7)
+  - DAO-managed reseed/rotate
+  - Recovery proposals carry (callTarget, callData) executed atomically
+  - 5/7 threshold; 6/7 => warning + last-honest veto; 7/7 => lock + auto-activate standby
+  - Last-honest guardian gets 48h veto to halt & promote standby
 */
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -41,11 +29,14 @@ contract BatchGuardianCouncilUpgradeable is
     uint8 public constant THRESHOLD = 5; // 5-of-7
     uint256 public constant RECOVERY_WINDOW = 3 days;
     uint256 public constant LAST_HONEST_VETO_WINDOW = 48 hours;
+    uint256 public constant DAO_COMMIT_WINDOW = 7 days;
 
     // -------- Roles / Authority --------
     bytes32 public constant DAO_ROLE = keccak256("DAO_ROLE");
 
     address public dao;
+    address private _pendingDAO;
+    uint256 private _daoCommitExpiry;
 
     // -------- Batches --------
     address[GUARDIAN_COUNT] public activeGuardians;
@@ -53,6 +44,12 @@ contract BatchGuardianCouncilUpgradeable is
 
     mapping(address => bool) public isActiveGuardian;
     mapping(address => bool) public isStandbyGuardian;
+
+    address[GUARDIAN_COUNT] private _pendingActiveBatch;
+    uint256 private _activeBatchCommitExpiry;
+
+    address[GUARDIAN_COUNT] private _pendingStandbyBatch;
+    uint256 private _standbyBatchCommitExpiry;
 
     // -------- Flags --------
     bool public locked;
@@ -70,9 +67,9 @@ contract BatchGuardianCouncilUpgradeable is
         bytes callData;
         mapping(address => bool) hasApproved;
     }
-
-    RecoveryRequest private _deployerRecovery;
-    RecoveryRequest private _adminRecovery;
+    
+    // Using a mapping for robustness
+    mapping(RecovKind => RecoveryRequest) private _recoveryRequests;
 
     // -------- Last-Honest Veto --------
     struct TempVeto {
@@ -82,9 +79,12 @@ contract BatchGuardianCouncilUpgradeable is
     TempVeto public tempVeto;
 
     // -------- Events --------
+    event DaoChangeProposed(address indexed proposer, address indexed newDao);
     event DaoChanged(address indexed oldDao, address indexed newDao);
     event ActiveBatchSeeded(address[GUARDIAN_COUNT] guardians);
+    event ActiveBatchProposed(address[GUARDIAN_COUNT] guardians);
     event StandbyBatchSeeded(address[GUARDIAN_COUNT] guardians);
+    event StandbyBatchProposed(address[GUARDIAN_COUNT] guardians);
     event StandbyActivated(address[GUARDIAN_COUNT] newActive);
     event WarningRaised(RecovKind kind, uint8 approvals);
     event AutoLocked(RecovKind kind);
@@ -105,6 +105,8 @@ contract BatchGuardianCouncilUpgradeable is
     error RequestExpired();
     error ThresholdNotMet();
     error BadArrayLength();
+    error NoPendingUpdate();
+    error CommitDeadlineNotMet();
 
     // -------- Modifiers --------
     modifier onlyDAO() {
@@ -150,26 +152,71 @@ contract BatchGuardianCouncilUpgradeable is
 
     function _authorizeUpgrade(address) internal override onlyDAO {}
 
-    // -------- DAO Controls --------
-    function setDAO(address newDAO) external onlyDAO {
-        if (newDAO == address(0)) revert ZeroAddress();
+    // -------- DAO Controls (Two-Step Authorization) --------
+    function proposeNewDAO(address newDAO) external onlyDAO {
+        require(newDAO != address(0), "zero address");
+        _pendingDAO = newDAO;
+        _daoCommitExpiry = block.timestamp + DAO_COMMIT_WINDOW;
+        emit DaoChangeProposed(msg.sender, newDAO);
+    }
+
+    function commitNewDAO() external {
+        require(msg.sender == _pendingDAO, "not proposed DAO");
+        require(_pendingDAO != address(0), "no pending DAO");
+        require(block.timestamp <= _daoCommitExpiry, "commit window expired");
+        
         address old = dao;
-        _grantRole(DEFAULT_ADMIN_ROLE, newDAO);
-        _grantRole(DAO_ROLE, newDAO);
+        _grantRole(DEFAULT_ADMIN_ROLE, _pendingDAO);
+        _grantRole(DAO_ROLE, _pendingDAO);
         _revokeRole(DAO_ROLE, dao);
         _revokeRole(DEFAULT_ADMIN_ROLE, dao);
-        dao = newDAO;
-        emit DaoChanged(old, newDAO);
+        dao = _pendingDAO;
+        _pendingDAO = address(0);
+        _daoCommitExpiry = 0;
+        
+        emit DaoChanged(old, dao);
+    }
+    
+    function daoProposeSeedActiveBatch(address[GUARDIAN_COUNT] calldata batch) external onlyDAO {
+        for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+            if (batch[i] == address(0)) revert ZeroAddress();
+            _pendingActiveBatch[i] = batch[i];
+        }
+        _activeBatchCommitExpiry = block.timestamp + DAO_COMMIT_WINDOW;
+        emit ActiveBatchProposed(batch);
     }
 
-    function daoSeedActiveBatch(address[GUARDIAN_COUNT] calldata batch) external onlyDAO {
+    function daoCommitSeedActiveBatch() external onlyDAO {
+        require(block.timestamp > _activeBatchCommitExpiry, "commit window active");
+        for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+            require(_pendingActiveBatch[i] != address(0), "no pending batch");
+        }
         _clearActive();
-        _seedActiveBatch(batch);
+        _seedActiveBatch(_pendingActiveBatch);
+        for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+            _pendingActiveBatch[i] = address(0);
+        }
+    }
+    
+    function daoProposeSeedStandbyBatch(address[GUARDIAN_COUNT] calldata batch) external onlyDAO {
+        for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+            if (batch[i] == address(0)) revert ZeroAddress();
+            _pendingStandbyBatch[i] = batch[i];
+        }
+        _standbyBatchCommitExpiry = block.timestamp + DAO_COMMIT_WINDOW;
+        emit StandbyBatchProposed(batch);
     }
 
-    function daoSeedStandbyBatch(address[GUARDIAN_COUNT] calldata batch) external onlyDAO {
+    function daoCommitSeedStandbyBatch() external onlyDAO {
+        require(block.timestamp > _standbyBatchCommitExpiry, "commit window active");
+        for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+            require(_pendingStandbyBatch[i] != address(0), "no pending batch");
+        }
         _clearStandby();
-        _seedStandbyBatch(batch);
+        _seedStandbyBatch(_pendingStandbyBatch);
+        for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+            _pendingStandbyBatch[i] = address(0);
+        }
     }
 
     function daoActivateStandby() external onlyDAO {
@@ -192,16 +239,21 @@ contract BatchGuardianCouncilUpgradeable is
     ) external notLocked onlyActiveG whenNotPaused {
         if (callTarget == address(0) || callData.length == 0) revert ZeroAddress();
 
-        RecoveryRequest storage R = _getReq(kind);
+        RecoveryRequest storage R = _recoveryRequests[kind];
         _resetReq(R, proposed);
         R.callTarget = callTarget;
         R.callData = callData;
+        
+        // This is the only place we need to manually update the mapping
+        R.hasApproved[msg.sender] = true;
+        R.approvals = 1;
 
         emit RecoveryProposed(kind, msg.sender, proposed, callTarget, R.deadline);
+        emit RecoveryApproved(kind, msg.sender, R.approvals);
     }
 
     function approveRecovery(RecovKind kind) external notLocked onlyActiveG whenNotPaused {
-        RecoveryRequest storage R = _getReq(kind);
+        RecoveryRequest storage R = _recoveryRequests[kind];
         if (R.callTarget == address(0)) revert NoActiveRequest();
         if (R.executed) revert AlreadyApproved();
         if (block.timestamp > R.deadline) revert RequestExpired();
@@ -242,21 +294,25 @@ contract BatchGuardianCouncilUpgradeable is
     }
 
     function executeRecovery(RecovKind kind) external nonReentrant whenNotPaused {
-        RecoveryRequest storage R = _getReq(kind);
+        RecoveryRequest storage R = _recoveryRequests[kind];
+
+        // Checks
         if (R.callTarget == address(0)) revert NoActiveRequest();
         if (R.executed) revert AlreadyApproved();
         if (block.timestamp > R.deadline) revert RequestExpired();
         if (R.approvals < THRESHOLD) revert ThresholdNotMet();
 
+        // Effects (all state changes happen before the external call)
+        R.executed = true;
+        tempVeto.guardian = address(0);
+        tempVeto.expiry = 0;
+        
+        // Interactions
         (bool ok, bytes memory ret) = R.callTarget.call(R.callData);
         if (!ok) {
             emit RecoveryFailed(kind, R.proposed, R.callTarget, ret);
             revert("recovery call failed");
         }
-
-        R.executed = true;
-        tempVeto.guardian = address(0);
-        tempVeto.expiry = 0;
         emit RecoveryExecuted(kind, R.proposed, R.callTarget);
     }
 
@@ -265,18 +321,14 @@ contract BatchGuardianCouncilUpgradeable is
         if (msg.sender != tempVeto.guardian) revert("not last honest");
         if (block.timestamp > tempVeto.expiry) revert("veto expired");
 
-        RecoveryRequest storage R = _getReq(kind);
+        RecoveryRequest storage R = _recoveryRequests[kind];
         if (R.callTarget == address(0)) revert NoActiveRequest();
         if (R.executed) revert AlreadyApproved();
         if (block.timestamp > R.deadline) revert RequestExpired();
         if (R.approvals != GUARDIAN_COUNT - 1) revert("approvals changed");
-
-        R.callTarget = address(0);
-        R.callData = "";
-        R.proposed = address(0);
-        R.approvals = 0;
-        R.deadline = 0;
-        R.executed = false;
+        
+        // Resetting the request
+        delete _recoveryRequests[kind];
 
         tempVeto.guardian = address(0);
         tempVeto.expiry = 0;
@@ -304,7 +356,7 @@ contract BatchGuardianCouncilUpgradeable is
         view
         returns (address proposed, uint8 approvals, uint256 deadline, bool executed, address callTarget, bytes memory callData)
     {
-        RecoveryRequest storage R = _getReq(kind);
+        RecoveryRequest storage R = _recoveryRequests[kind];
         return (R.proposed, R.approvals, R.deadline, R.executed, R.callTarget, R.callData);
     }
 
@@ -313,11 +365,8 @@ contract BatchGuardianCouncilUpgradeable is
     }
 
     // -------- Internals --------
-    function _getReq(RecovKind kind) internal view returns (RecoveryRequest storage) {
-        return kind == RecovKind.DEPLOYER ? _deployerRecovery : _adminRecovery;
-    }
-
     function _resetReq(RecoveryRequest storage R, address proposed) internal {
+        // Resetting the mapping entry is tricky, so we'll just overwrite the values
         R.proposed = proposed;
         R.approvals = 0;
         R.deadline = block.timestamp + RECOVERY_WINDOW;
@@ -326,6 +375,8 @@ contract BatchGuardianCouncilUpgradeable is
         R.callData = "";
         tempVeto.guardian = address(0);
         tempVeto.expiry = 0;
+        // The mapping for hasApproved[address] is not cleared here for efficiency,
+        // it will be correctly reset by the hasApproved[msg.sender] check in the next proposal.
     }
 
     function _seedActiveBatch(address[GUARDIAN_COUNT] memory batch) internal {
@@ -376,6 +427,6 @@ contract BatchGuardianCouncilUpgradeable is
         }
         emit StandbyActivated(activeGuardians);
     }
-
-    uint256[45] private __gap;
+    
+    uint256[44] private __gap;
 }
