@@ -1,21 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
-contract CatalystGovernance is ReentrancyGuard {
+/// @title Catalyst Governance (Upgradeable)
+/// @notice Lightweight governance system consuming staking stats later.
+///         Upgradeable via UUPS, admin controlled by GuardianCouncil.
+contract CatalystGovernanceUpgradeable is
+    Initializable,
+    AccessControlUpgradeable,
+    UUPSUpgradeable,
+    ReentrancyGuardUpgradeable
+{
+    // --- Roles ---
+    bytes32 public constant CONTRACT_ADMIN_ROLE = keccak256("CONTRACT_ADMIN_ROLE");
+
     // --- Access control ---
     address public council;
-    address public admin;
 
     event AdminSwapped(address indexed oldAdmin, address indexed newAdmin);
     event CouncilSet(address indexed oldCouncil, address indexed newCouncil);
-
-    modifier onlyAdmin() {
-        require(msg.sender == admin, "only admin");
-        _;
-    }
 
     modifier onlyCouncil() {
         require(msg.sender == council, "only council");
@@ -24,7 +31,7 @@ contract CatalystGovernance is ReentrancyGuard {
 
     // --- Governance state ---
     uint256 public constant WEIGHT_SCALE = 1e18;
-    uint256 public minStakeAgeForVoting = 100; // example, blocks
+    uint256 public minStakeAgeForVoting; // placeholder, not enforced yet
 
     struct Proposal {
         ProposalType pType;
@@ -61,7 +68,7 @@ contract CatalystGovernance is ReentrancyGuard {
 
     // --- Parameters controlled by governance ---
     uint256 public baseRewardRate;
-    uint256 public maxBaseRewardRate = 1e18;
+    uint256 public maxBaseRewardRate;
     uint256 public initialHarvestBurnFeeRate;
     uint256 public unstakeBurnFee;
     uint256 public collectionRegistrationFee;
@@ -89,34 +96,60 @@ contract CatalystGovernance is ReentrancyGuard {
     // --- Errors ---
     error Ineligible();
     error BadParam();
-    error NotRegistered();
 
-    constructor(address _admin, address _council, uint256 votingDuration, uint256 minVotes, uint256 capPercent) {
-        require(_admin != address(0) && _council != address(0), "zero address");
+    // -------------------------
+    // Init
+    // -------------------------
+    function initialize(
+        address admin,
+        address council_,
+        uint256 votingDuration,
+        uint256 minVotes,
+        uint256 capPercent
+    ) external initializer {
+        __AccessControl_init();
+        __UUPSUpgradeable_init();
+        __ReentrancyGuard_init();
+
+        require(admin != address(0) && council_ != address(0), "zero address");
         require(capPercent <= 100, "cap>100");
-        admin = _admin;
-        council = _council;
+
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(CONTRACT_ADMIN_ROLE, admin);
+
+        council = council_;
         votingDurationBlocks = votingDuration;
         minVotesRequiredScaled = minVotes;
         collectionVoteCapPercent = capPercent;
+
+        maxBaseRewardRate = 1e18;
+        minStakeAgeForVoting = 100; // placeholder
     }
 
-    // --- Council / Admin mgmt ---
-    function setCouncil(address newCouncil) external onlyAdmin {
+    // -------------------------
+    // Council / Admin
+    // -------------------------
+    function setCouncil(address newCouncil) external onlyRole(CONTRACT_ADMIN_ROLE) {
         require(newCouncil != address(0), "zero");
         address old = council;
         council = newCouncil;
         emit CouncilSet(old, newCouncil);
     }
 
-    function swapAdmin(address newAdmin) external onlyCouncil {
+    function swapAdmin(address newAdmin, address oldAdmin) external onlyCouncil {
         require(newAdmin != address(0), "zero");
-        address old = admin;
-        admin = newAdmin;
-        emit AdminSwapped(old, newAdmin);
+        if (!hasRole(DEFAULT_ADMIN_ROLE, newAdmin)) {
+            _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
+        }
+        if (oldAdmin != address(0) && hasRole(DEFAULT_ADMIN_ROLE, oldAdmin)) {
+            _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
+        }
+        emit AdminSwapped(oldAdmin, newAdmin);
     }
 
-    // --- Governance actions ---
+    // -------------------------
+    // Governance actions
+    // -------------------------
     function propose(
         ProposalType pType,
         uint8 paramTarget,
@@ -126,7 +159,9 @@ contract CatalystGovernance is ReentrancyGuard {
         (uint256 weight,) = _votingWeight(msg.sender);
         if (weight == 0) revert Ineligible();
 
-        id = keccak256(abi.encodePacked(uint256(pType), paramTarget, newValue, collectionContext, block.number, msg.sender));
+        id = keccak256(
+            abi.encodePacked(uint256(pType), paramTarget, newValue, collectionContext, block.number, msg.sender)
+        );
         Proposal storage p = proposals[id];
         require(p.startBlock == 0, "exists");
 
@@ -199,7 +234,7 @@ contract CatalystGovernance is ReentrancyGuard {
             else if (t == 2) { uint256 old = collectionVoteCapPercent; collectionVoteCapPercent = p.newValue; emit VotingParamUpdated(t, old, p.newValue); }
             else revert BadParam();
         } else if (p.pType == ProposalType.TIER_UPGRADE) {
-            emit CollectionTierUpgraded(p.collectionAddress, 3); // 3 = BLUECHIP in original enum
+            emit CollectionTierUpgraded(p.collectionAddress, 3); // 3 = BLUECHIP
         } else {
             revert BadParam();
         }
@@ -207,6 +242,9 @@ contract CatalystGovernance is ReentrancyGuard {
         emit ProposalExecuted(id, p.newValue);
     }
 
+    // -------------------------
+    // Info
+    // -------------------------
     function getProposalInfo(bytes32 id)
         external
         view
@@ -236,10 +274,17 @@ contract CatalystGovernance is ReentrancyGuard {
         );
     }
 
-    // --- Mocked voting weight (replace with staking logic) ---
+    // -------------------------
+    // Mocked voting weight
+    // -------------------------
     function _votingWeight(address voter) internal view returns (uint256 weight, address attributedCollection) {
         if (voter == address(0)) return (0, address(0));
-        // For demo: everyone has equal weight
+        // placeholder: everyone has equal weight
         return (WEIGHT_SCALE, address(0));
     }
+
+    // -------------------------
+    // UUPS
+    // -------------------------
+    function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }
