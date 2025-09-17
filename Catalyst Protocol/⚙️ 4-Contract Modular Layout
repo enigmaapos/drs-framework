@@ -85,9 +85,28 @@ Core Logic:
 
 Proposals (create, vote, execute).
 
+Proposals:
+
+BASE_REWARD, HARVEST_FEE, UNSTAKE_FEE, REGISTRATION_FEE_FALLBACK, VOTING_PARAM, TIER_UPGRADE, COUNCIL_RESEED.
+
+
+Voting: Weighted votes wired to CatalystStaking (staking.votingWeight).
+
 Voting weight = derived from staking stats (burnedBy, stakeAge, collection stakes).
 
 Executes governance-approved changes by calling setter functions in CatalystStaking (e.g., reward rate, fees, collection tier upgrades).
+
+Council as DAO: council is the BatchGuardianCouncil contract.
+
+Council reseed: Governance can propose/approve/execute a reseed with address[7] batch → calls daoSeedActiveBatch() on council.
+
+Zero address validation: Ensures batches are valid before storing/executing.
+
+Proposal encoding/decoding helpers: encodeCouncilBatch, decodeCouncilBatch.
+
+Events for all state changes.
+
+ReentrancyGuard on execution.
 
 
 Design:
