@@ -2,11 +2,18 @@
 pragma solidity ^0.8.20;
 
 /*
-Standalone upgradeable staking contract.
-- UUPS upgradeable
-- Uses OZ upgradeable components
-- Interacts with an external CATA token (must grant this contract MINTER_ROLE)
-- Hard-coded fee split: BURN_BP=9000 (90%), TREASURY_BP=900 (9%), DEPLOYER_BP=100 (1%)
+Merged single-file:
+- CatalystStakingGovernanceUpgradeable
+  - Upgradeable (UUPS) + AccessControl + Pausable + ReentrancyGuard
+  - NFT staking (term + permanent)
+  - Collection registration (UNVERIFIED / VERIFIED / BLUECHIP)
+  - Fee split and escrow logic
+  - Bluechip wallet enrollment & harvest
+  - Governance (propose / vote / execute) using on-chain staking & bluechip enrollment for voting weight
+
+Changes:
+- Added recyclable global CATA cap (GLOBAL_CATA_CAP) enforced using cata.totalSupply()
+- Added global NFT stake cap (GLOBAL_NFT_STAKE_CAP) enforced using totalStakedNFTsCount
 */
 
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -19,35 +26,45 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 interface ICataToken is IERC20Upgradeable {
     function mint(address to, uint256 amount) external;
     function burn(uint256 amount) external;
+    function totalSupply() external view returns (uint256);
 }
 
-contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessControlUpgradeable, ReentrancyGuardUpgradeable, PausableUpgradeable {
-    // --- Roles
+interface IERC721 {
+    function safeTransferFrom(address from, address to, uint256 tokenId) external;
+    function balanceOf(address owner) external view returns (uint256);
+    function ownerOf(uint256 tokenId) external view returns (address);
+}
+
+interface IOwnable {
+    function owner() external view returns (address);
+}
+
+contract CatalystStakingGovernanceUpgradeable is Initializable, UUPSUpgradeable, AccessControlUpgradeable, ReentrancyGuardUpgradeable, PausableUpgradeable {
+    // -----------------------
+    // Roles & constants
+    // -----------------------
     bytes32 public constant CONTRACT_ADMIN_ROLE = keccak256("CONTRACT_ADMIN_ROLE");
-
-    // --- Constants: fee split (hard-coded)
-    uint256 public constant BURN_BP = 9000;      // 90.00%
-    uint256 public constant TREASURY_BP = 900;   // 9.00%
-    uint256 public constant DEPLOYER_BP = 100;   // 1.00%
     uint256 public constant BP_DENOM = 10000;
+    uint256 public constant BURN_BP = 9000;    // 90%
+    uint256 public constant TREASURY_BP = 900; // 9%
+    uint256 public constant DEPLOYER_BP = 100; // 1%
 
-    // --- Limits & defaults
-    uint256 public constant MAX_STAKE_PER_COLLECTION = 20_000;
-    uint256 public constant MAX_HARVEST_BATCH = 50;
+    // ============ Global Supply Caps ============
+    uint256 public constant GLOBAL_CATA_CAP = 1_000_000_000 ether; // Max CATA token circulating at any time (recyclable)
+    uint256 public constant GLOBAL_NFT_STAKE_CAP = 1_000_000_000;  // Max NFTs that can be staked at any time (recyclable)
 
-    // --- External token
+    // -----------------------
+    // External token + addresses
+    // -----------------------
     ICataToken public cata;
-
-    // --- Council (DRS) address (for swapAdmin calls)
     address public council;
-
-    // --- Deployer share recipient (hard-coded at initialize)
     address public deployerAddress;
 
-    // --- Collection tiers
+    // -----------------------
+    // Collection & tiering
+    // -----------------------
     enum CollectionTier { UNVERIFIED, VERIFIED, BLUECHIP }
 
-    // --- Collection metadata
     struct CollectionConfig {
         uint256 totalStaked;
         uint256 totalStakers;
@@ -62,60 +79,56 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
         uint256 lastTierProposalBlock;
     }
 
-    // registry
     address[] public registeredCollections;
-    mapping(address => uint256) public registeredIndex; // 0 = not registered, index = pos+1
+    mapping(address => uint256) public registeredIndex;
     mapping(address => CollectionConfig) public collectionConfigs;
     mapping(address => CollectionMeta) public collectionMeta;
 
-    // bookkeeping for top collections & bluechip
+    // top collections & bluechip flags
     address[] public topCollections;
     mapping(address => bool) public isBluechipCollection;
 
-    // treasury accounting (tokens held in contract represent treasury + escrow)
+    // treasury & burn tracking
     uint256 public treasuryBalance;
-
-    // burn tracking & participation
     mapping(address => uint256) public burnedCatalystByCollection;
     mapping(address => uint256) public burnedCatalystByAddress;
     mapping(address => bool) public isParticipating;
     address[] public participatingWallets;
     mapping(address => uint256) public lastBurnBlock;
 
-    // ---- Staking data structures
+    // -----------------------
+    // Staking book-keeping
+    // -----------------------
     struct StakeInfo {
         bool currentlyStaked;
         bool isPermanent;
         uint256 stakeBlock;
-        uint256 unstakeDeadlineBlock; // 0 if permanent
+        uint256 unstakeDeadlineBlock;
         uint256 lastHarvestBlock;
     }
 
     // collection => owner => tokenId => StakeInfo
     mapping(address => mapping(address => mapping(uint256 => StakeInfo))) public stakeLog;
-    // collection => owner => tokenIds[]
     mapping(address => mapping(address => uint256[])) public stakePortfolioByUser;
-    // collection => tokenId => index in portfolio
     mapping(address => mapping(uint256 => uint256)) public indexOfTokenIdInStakePortfolio;
 
-    // collection-level totals
     mapping(address => uint256) public collectionTotalStaked;
     uint256 public totalStakedNFTsCount;
 
-    // reward config and counters
-    uint256 public baseRewardRate;                 //abstract unit for reward formula
-    uint256 public numberOfBlocksPerRewardUnit;   // denominator for reward calc
+    // reward config
+    uint256 public baseRewardRate;                 // abstract units
+    uint256 public numberOfBlocksPerRewardUnit;
     uint256 public rewardRateIncrementPerNFT;
     uint256 public welcomeBonusBaseRate;
     uint256 public welcomeBonusIncrementPerNFT;
 
     // staking policy params
     uint256 public termDurationBlocks;
-    uint256 public unstakeBurnFee; // fee amount for unstake (in CATA)
-    uint256 public permanentStakeFeeBase; // used in permanent stake fee calc
+    uint256 public unstakeBurnFee; // fee in CATA for unstake
+    uint256 public permanentStakeFeeBase;
 
-    // surcharge params & tier upgrade rules
-    uint256 public unverifiedSurchargeBP; // e.g., 12000 -> 120%
+    // surcharge & tier upgrade rules
+    uint256 public unverifiedSurchargeBP;
     uint256 public tierUpgradeMinAgeBlocks;
     uint256 public tierUpgradeMinBurn;
     uint256 public tierUpgradeMinStakers;
@@ -124,7 +137,21 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
     // bluechip enrollment
     uint256 public bluechipWalletFee;
 
-    // events
+    // registration fee curve constants
+    uint256 public constant SMALL_MIN_FEE = 1 * 10**18;
+    uint256 public constant SMALL_MAX_FEE = 10 * 10**18;
+    uint256 public constant MED_MIN_FEE = 11 * 10**18;
+    uint256 public constant MED_MAX_FEE = 50 * 10**18;
+    uint256 public constant LARGE_MIN_FEE = 51 * 10**18;
+    uint256 public constant LARGE_MAX_FEE_CAP = 200 * 10**18;
+
+    // batch limits / caps
+    uint256 public constant MAX_STAKE_PER_COLLECTION = 20_000;
+    uint256 public constant MAX_HARVEST_BATCH = 50;
+
+    // -----------------------
+    // Events
+    // -----------------------
     event TreasuryDeposit(address indexed from, uint256 amount);
     event CollectionAdded(address indexed collection, uint256 declaredSupply, uint256 baseFee, uint256 escrow, CollectionTier tier);
     event CollectionRemoved(address indexed collection);
@@ -137,6 +164,66 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
     event BluechipHarvested(address indexed who, address indexed collection, uint256 amount);
     event AdminSwapped(address indexed oldAdmin, address indexed newAdmin);
     event CouncilSet(address indexed oldCouncil, address indexed newCouncil);
+
+    // -----------------------
+    // GOVERNANCE STORAGE
+    // -----------------------
+    uint256 public constant WEIGHT_SCALE = 1e18;
+    uint256 public minStakeAgeForVoting; // blocks a stake must be older than to count for governance
+
+    enum ProposalType {
+        BASE_REWARD,
+        HARVEST_FEE,
+        UNSTAKE_FEE,
+        REGISTRATION_FEE_FALLBACK,
+        VOTING_PARAM,
+        TIER_UPGRADE
+    }
+
+    struct Proposal {
+        ProposalType pType;
+        uint8 paramTarget;
+        uint256 newValue;
+        address collectionAddress;
+        address proposer;
+        uint256 startBlock;
+        uint256 endBlock;
+        uint256 votesScaled;
+        bool executed;
+    }
+
+    // governance mappings
+    mapping(bytes32 => Proposal) public proposals;
+    mapping(bytes32 => mapping(address => bool)) public hasVoted;
+    mapping(bytes32 => mapping(address => uint256)) public proposalCollectionVotesScaled;
+
+    // governance params
+    uint256 public votingDurationBlocks;
+    uint256 public minVotesRequiredScaled;
+    uint256 public collectionVoteCapPercent; // 0..100
+
+    // index of proposals for frontend
+    bytes32[] public proposalIds;
+    mapping(bytes32 => uint256) public proposalIndex; // 1-based
+
+    // governance events
+    event ProposalCreated(bytes32 indexed id, ProposalType pType, uint8 paramTarget, address indexed collection, address indexed proposer, uint256 newValue, uint256 startBlock, uint256 endBlock);
+    event VoteCast(bytes32 indexed id, address indexed voter, uint256 weightScaled, address attributedCollection);
+    event ProposalMarkedExecuted(bytes32 indexed id);
+    event ProposalExecuted(bytes32 indexed id, uint256 newValue);
+    event VotingParamUpdated(uint8 indexed param, uint256 oldValue, uint256 newValue);
+    event BaseRewardRateUpdated(uint256 oldValue, uint256 newValue);
+    event HarvestFeeUpdated(uint256 oldValue, uint256 newValue);
+    event UnstakeFeeUpdated(uint256 oldValue, uint256 newValue);
+    event RegistrationFeeUpdated(uint256 oldValue, uint256 newValue);
+    event CollectionTierUpgraded(address indexed collection, CollectionTier newTier);
+
+    // -----------------------
+    // Bluechip non-custodial
+    // -----------------------
+    // collection => wallet => enrolled (using address(0) for global enrollment)
+    mapping(address => mapping(address => bool)) public bluechipWallets;
+    mapping(address => mapping(address => uint256)) public bluechipLastHarvestBlock;
 
     // -----------------------
     // Initialization
@@ -155,35 +242,37 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
         __Pausable_init();
         __UUPSUpgradeable_init();
 
-        // roles
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(CONTRACT_ADMIN_ROLE, contractAdmin);
 
-        // external
         council = council_;
         cata = ICataToken(cataToken);
         deployerAddress = deployerAddr;
 
-        // sensible defaults (these can be changed via admin functions if you add them)
-        numberOfBlocksPerRewardUnit = 6500; // example: ~1 day worth of blocks on eth main (adjust per chain)
+        // sensible defaults
+        numberOfBlocksPerRewardUnit = 6500;
         baseRewardRate = 10;
         rewardRateIncrementPerNFT = 1;
         welcomeBonusBaseRate = 5;
         welcomeBonusIncrementPerNFT = 1;
-        termDurationBlocks = 65000; // ~10 days example
-        unstakeBurnFee = 1 * (10 ** 18); // set to 1 CATA (caller must approve)
-        permanentStakeFeeBase = 10 * (10 ** 18); // 10 CATA example
+        termDurationBlocks = 65000;
+        unstakeBurnFee = 1 * 10**18;
+        permanentStakeFeeBase = 10 * 10**18;
 
-        // surcharge defaults
-        unverifiedSurchargeBP = 12000; // 120% (i.e., surcharge increases base fee 20%)
+        unverifiedSurchargeBP = 12000;
         tierUpgradeMinAgeBlocks = 10000;
         tierUpgradeMinBurn = 1 ether;
         tierUpgradeMinStakers = 2;
         surchargeForfeitBlocks = 200000;
 
-        bluechipWalletFee = 1 * (10 ** 18); // 1 CATA
+        bluechipWalletFee = 1 * 10**18;
 
-        // counters
+        // governance defaults
+        votingDurationBlocks = 6500; // example ~1 day
+        minVotesRequiredScaled = WEIGHT_SCALE; // one full vote required by default
+        collectionVoteCapPercent = 50; // cap 50% of minVotesRequiredScaled per collection
+        minStakeAgeForVoting = 0; // default to zero if you want stake immediately count
+
         totalStakedNFTsCount = 0;
         treasuryBalance = 0;
     }
@@ -192,7 +281,7 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
     function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
     // -----------------------
-    // Administrative helpers
+    // Admin helpers
     // -----------------------
     function setCouncil(address newCouncil) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newCouncil != address(0), "zero");
@@ -201,28 +290,17 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
         emit CouncilSet(old, newCouncil);
     }
 
-    /// @notice swap admin safely (grant -> revoke). Only council may call.
     function swapAdmin(address newAdmin, address oldAdmin) external {
         require(msg.sender == council, "only council");
         require(newAdmin != address(0), "zero new");
-        // grant -> revoke on this contract (we operate AccessControl)
         if (!hasRole(DEFAULT_ADMIN_ROLE, newAdmin)) _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         if (oldAdmin != address(0) && hasRole(DEFAULT_ADMIN_ROLE, oldAdmin)) _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
         emit AdminSwapped(oldAdmin, newAdmin);
     }
 
     // -----------------------
-    // Registration & fees
+    // Fee helpers & registration
     // -----------------------
-
-    // fee curve constants for registration (example boundaries from earlier)
-    uint256 public constant SMALL_MIN_FEE = 1 * (10 ** 18);
-    uint256 public constant SMALL_MAX_FEE = 10 * (10 ** 18);
-    uint256 public constant MED_MIN_FEE = 11 * (10 ** 18);
-    uint256 public constant MED_MAX_FEE = 50 * (10 ** 18);
-    uint256 public constant LARGE_MIN_FEE = 51 * (10 ** 18);
-    uint256 public constant LARGE_MAX_FEE_CAP = 200 * (10 ** 18);
-
     function _calculateRegistrationBaseFee(uint256 declaredSupply) internal pure returns (uint256) {
         require(declaredSupply >= 1, "declared>=1");
         if (declaredSupply <= 5000) {
@@ -247,10 +325,9 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
         return (total, sur);
     }
 
-    /// @dev immutably split: caller must `approve` this contract for amount first.
+    /// @dev transferFrom payer -> this contract, then split/burn/transfer
     function _splitFeeFromSender(address payer, uint256 amount, address collection, bool attributeToUser) internal {
         require(amount > 0, "zero fee");
-        // pull tokens into contract
         bool ok = IERC20Upgradeable(address(cata)).transferFrom(payer, address(this), amount);
         require(ok, "transferFrom failed");
 
@@ -258,7 +335,6 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
         uint256 treasuryAmt = (amount * TREASURY_BP) / BP_DENOM;
         uint256 deployerAmt = amount - burnAmt - treasuryAmt;
 
-        // burn from contract balance
         if (burnAmt > 0) {
             cata.burn(burnAmt);
             burnedCatalystByCollection[collection] += burnAmt;
@@ -272,31 +348,27 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
             }
         }
 
-        // transfer deployer share
         if (deployerAmt > 0) {
             bool ok2 = IERC20Upgradeable(address(cata)).transfer(deployerAddress, deployerAmt);
             require(ok2, "deployer transfer failed");
         }
 
-        // treasury share stays in contract (already transferred)
         if (treasuryAmt > 0) {
             treasuryBalance += treasuryAmt;
             emit TreasuryDeposit(payer, treasuryAmt);
         }
     }
 
-    // ---------- Collection registration (permissionless) ----------
+    // ---------- Registration (permissionless) ----------
     function registerCollection(address collection, uint256 declaredMaxSupply, CollectionTier requestedTier) external nonReentrant whenNotPaused {
         require(collection != address(0), "bad addr");
         require(registeredIndex[collection] == 0, "already reg");
         require(declaredMaxSupply >= 1 && declaredMaxSupply <= MAX_STAKE_PER_COLLECTION, "supply range");
 
-        // determine allowed tier
         bool allowVerified = false;
         if (hasRole(CONTRACT_ADMIN_ROLE, _msgSender()) || hasRole(DEFAULT_ADMIN_ROLE, _msgSender())) {
             allowVerified = true;
         } else {
-            // try owner detection (ownerOf(0) or Ownable)
             try IERC721(collection).ownerOf(0) returns (address ownerAddr) {
                 if (ownerAddr == _msgSender()) allowVerified = true;
             } catch {
@@ -313,9 +385,7 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
         uint256 baseFee = _calculateRegistrationBaseFee(declaredMaxSupply);
         (uint256 totalFee, uint256 surcharge) = _computeFeeAndSurchargeForTier(baseFee, tierToUse);
 
-        // require approval and balance
         require(IERC20Upgradeable(address(cata)).balanceOf(_msgSender()) >= totalFee, "insufficient balance");
-        // process baseFee and surcharge: baseFee split burned/transferred; surcharge escrowed to contract
         _splitFeeFromSender(_msgSender(), baseFee, collection, true);
 
         uint256 escrowAmt = 0;
@@ -325,7 +395,6 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
             escrowAmt = surcharge;
         }
 
-        // register
         registeredCollections.push(collection);
         registeredIndex[collection] = registeredCollections.length;
 
@@ -344,16 +413,8 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
             lastTierProposalBlock: 0
         });
 
-        // placeholder hooks to update top collections (not fully implemented here)
         _maybeRebuildTopCollections();
-
         emit CollectionAdded(collection, declaredMaxSupply, baseFee, escrowAmt, tierToUse);
-    }
-
-    function setCollectionConfig(address collection, uint256 declaredMaxSupply, CollectionTier tier) external onlyRole(CONTRACT_ADMIN_ROLE) whenNotPaused {
-        require(collection != address(0), "bad addr");
-        require(registeredIndex[collection] == 0, "already reg"); // using same checks as earlier? If admin-only bootstrap allow
-        // This function is kept for admin quick-seed; implementation depends on desired policy
     }
 
     function removeCollection(address collection) external onlyRole(CONTRACT_ADMIN_ROLE) whenNotPaused {
@@ -373,7 +434,6 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
             registeredIndex[collection] = 0;
         }
 
-        // remove from topCollections if present (simple linear)
         for (uint256 t = 0; t < topCollections.length; t++) {
             if (topCollections[t] == collection) {
                 for (uint256 j = t; j + 1 < topCollections.length; j++) topCollections[j] = topCollections[j + 1];
@@ -395,9 +455,7 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
 
         uint256 toBurn = amt / 2;
         uint256 toTreasury = amt - toBurn;
-        // burn half
         cata.burn(toBurn);
-        // keep treasury portion in contract
         treasuryBalance += toTreasury;
         m.surchargeEscrow = 0;
         emit TreasuryDeposit(address(this), toTreasury);
@@ -407,13 +465,11 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
     // -----------------------
     // Staking functions
     // -----------------------
-    // NOTE: users must approve this contract to transfer required CATA fees when needed
-
     function termStake(address collection, uint256 tokenId) public nonReentrant whenNotPaused {
         require(collectionConfigs[collection].registered, "not reg");
         require(collectionConfigs[collection].totalStaked < MAX_STAKE_PER_COLLECTION, "cap");
+        require(totalStakedNFTsCount + 1 <= GLOBAL_NFT_STAKE_CAP, "stake cap exceeded");
 
-        // transfer NFT into contract (caller must approve NFT)
         IERC721(collection).safeTransferFrom(_msgSender(), address(this), tokenId);
 
         StakeInfo storage info = stakeLog[collection][_msgSender()][tokenId];
@@ -436,29 +492,25 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
         indexOfTokenIdInStakePortfolio[collection][tokenId] = stakePortfolioByUser[collection][_msgSender()].length - 1;
 
         uint256 dynamicWelcome = welcomeBonusBaseRate + (totalStakedNFTsCount * welcomeBonusIncrementPerNFT);
-        // mint welcome bonus directly to staker
-        cata.mint(_msgSender(), dynamicWelcome);
+        _mintReward(_msgSender(), dynamicWelcome);
 
         lastBurnBlock[_msgSender()] = block.number;
-
         emit NFTStaked(_msgSender(), collection, tokenId);
     }
 
     function permanentStake(address collection, uint256 tokenId) public nonReentrant whenNotPaused {
         require(collectionConfigs[collection].registered, "not reg");
         require(collectionConfigs[collection].totalStaked < MAX_STAKE_PER_COLLECTION, "cap");
+        require(totalStakedNFTsCount + 1 <= GLOBAL_NFT_STAKE_CAP, "stake cap exceeded");
 
         uint256 fee = permanentStakeFeeBase;
-        // require user has approved fee to this contract
         require(IERC20Upgradeable(address(cata)).balanceOf(_msgSender()) >= fee, "insufficient CATA");
 
-        // transfer NFT
         IERC721(collection).safeTransferFrom(_msgSender(), address(this), tokenId);
 
         StakeInfo storage info = stakeLog[collection][_msgSender()][tokenId];
         require(!info.currentlyStaked, "already staked");
 
-        // immutable split: transferFrom fee then split
         _splitFeeFromSender(_msgSender(), fee, collection, true);
 
         info.stakeBlock = block.number;
@@ -478,10 +530,9 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
         indexOfTokenIdInStakePortfolio[collection][tokenId] = stakePortfolioByUser[collection][_msgSender()].length - 1;
 
         uint256 dynamicWelcome = welcomeBonusBaseRate + (totalStakedNFTsCount * welcomeBonusIncrementPerNFT);
-        cata.mint(_msgSender(), dynamicWelcome);
+        _mintReward(_msgSender(), dynamicWelcome);
 
         lastBurnBlock[_msgSender()] = block.number;
-
         emit PermanentStakeFeePaid(_msgSender(), fee);
         emit NFTStaked(_msgSender(), collection, tokenId);
     }
@@ -503,7 +554,6 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
 
         _harvest(collection, _msgSender(), tokenId);
 
-        // collect unstake fee (caller must approve)
         require(IERC20Upgradeable(address(cata)).balanceOf(_msgSender()) >= unstakeBurnFee, "fee");
         _splitFeeFromSender(_msgSender(), unstakeBurnFee, collection, true);
 
@@ -523,10 +573,13 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
         IERC721(collection).safeTransferFrom(address(this), _msgSender(), tokenId);
 
         CollectionConfig storage cfg = collectionConfigs[collection];
-        if (stakePortfolioByUser[collection][_msgSender()].length == 0) cfg.totalStakers -= 1;
-        cfg.totalStaked -= 1;
+        if (stakePortfolioByUser[collection][_msgSender()].length == 0 && cfg.totalStakers > 0) cfg.totalStakers -= 1;
+        if (cfg.totalStaked > 0) cfg.totalStaked -= 1;
 
         if (baseRewardRate >= rewardRateIncrementPerNFT) baseRewardRate -= rewardRateIncrementPerNFT;
+
+        // decrement global staked count
+        if (totalStakedNFTsCount > 0) totalStakedNFTsCount -= 1;
 
         emit NFTUnstaked(_msgSender(), collection, tokenId);
     }
@@ -540,8 +593,22 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
     }
 
     // -----------------------
-    // Harvesting & rewards
+    // CATA mint helper (recyclable cap)
     // -----------------------
+    function _mintReward(address to, uint256 amount) internal {
+        if (amount == 0) return;
+        uint256 current = cata.totalSupply();
+        require(current + amount <= GLOBAL_CATA_CAP, "CATA: cap exceeded");
+        cata.mint(to, amount);
+    }
+
+    // -----------------------
+    // Harvest and pending
+    // -----------------------
+    function _getDynamicHarvestBurnFeeRate() internal view returns (uint256) {
+        return 10; // 10% in this example (expressed as integer percentage)
+    }
+
     function _harvest(address collection, address user, uint256 tokenId) internal {
         StakeInfo storage info = stakeLog[collection][user][tokenId];
         uint256 reward = pendingRewards(collection, user, tokenId);
@@ -550,20 +617,20 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
             return;
         }
 
-        uint256 feeRateBP = _getDynamicHarvestBurnFeeRate(); // an example % in BP (0..100)
-        uint256 burnAmt = (reward * feeRateBP) / 100;
-        uint256 payout = reward - burnAmt;
+        uint256 feeRatePercent = _getDynamicHarvestBurnFeeRate();
+        uint256 burnAmt = (reward * feeRatePercent) / 100;
+        uint256 payout = (reward > burnAmt) ? (reward - burnAmt) : 0;
 
-        // mint full reward to user (we will burn portion from user's minted balance to attribute burn)
+        // grossMint is reward (payout + burnAmt) plus because we mint both user reward and mint burnAmt to contract to burn
+        uint256 grossMint = reward + burnAmt;
+        uint256 current = cata.totalSupply();
+        require(current + grossMint <= GLOBAL_CATA_CAP, "CATA: cap exceeded");
+
+        // Mint reward to user
         cata.mint(user, reward);
 
+        // Mint burn amount to contract then burn it (to attribute/track burns)
         if (burnAmt > 0) {
-            // user must have the tokens we just minted; burn from contract's perspective we burn user's tokens by having user approve then burning via transferFrom -> burn
-            // simpler: instruct CATA to burn from user's balance - requires CATA to implement burnFrom or allow this contract to burn exact user balance.
-            // Here we assume the token implements burn(uint256) for caller to burn its own balance; since user is external, easiest pattern:
-            // Instead: mint payout to user & burn burnAmt by minting to contract then burning; however that does not reduce user's balance. So the safe requirement:
-            // *Caveat*: This implementation will mint full reward to user and then mint & burn burnAmt from contract supply to implement net effect of payout.
-            // We'll implement burn by minting burnAmt to contract and burning immediately to keep supply accounting consistent.
             cata.mint(address(this), burnAmt);
             cata.burn(burnAmt);
             burnedCatalystByCollection[collection] += burnAmt;
@@ -580,12 +647,6 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
         for (uint256 i = 0; i < tokenIds.length; i++) _harvest(collection, _msgSender(), tokenIds[i]);
     }
 
-    // Example dynamic harvest fee (can be replaced with real logic)
-    function _getDynamicHarvestBurnFeeRate() internal view returns (uint256) {
-        // return percent (0..100), here example fixed 10%
-        return 10;
-    }
-
     function pendingRewards(address collection, address owner, uint256 tokenId) public view returns (uint256) {
         StakeInfo memory info = stakeLog[collection][owner][tokenId];
         if (!info.currentlyStaked || baseRewardRate == 0 || totalStakedNFTsCount == 0) return 0;
@@ -599,15 +660,12 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
     }
 
     // -----------------------
-    // Blue-chip (non-custodial light support)
+    // Bluechip non-custodial
     // -----------------------
-    mapping(address => mapping(address => bool)) public bluechipWallets; // collection => wallet => enrolled
-    mapping(address => mapping(address => uint256)) public bluechipLastHarvestBlock; // collection => wallet => lastHarvest
-
-    function setBluechipCollection(address collection, bool isBluechip) external onlyRole(CONTRACT_ADMIN_ROLE) whenNotPaused {
+    function setBluechipCollection(address collection, bool _isBluechip) external onlyRole(CONTRACT_ADMIN_ROLE) whenNotPaused {
         require(collection != address(0), "zero");
         require(registeredIndex[collection] != 0, "not reg");
-        isBluechipCollection[collection] = isBluechip;
+        isBluechipCollection[collection] = _isBluechip;
     }
 
     function enrollBluechip() external nonReentrant whenNotPaused {
@@ -615,7 +673,6 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
         require(!bluechipWallets[address(0)][wallet], "already enrolled");
         uint256 fee = bluechipWalletFee;
         if (fee > 0) {
-            // must approve
             _splitFeeFromSender(wallet, fee, address(0), false);
         }
         bluechipWallets[address(0)][wallet] = true;
@@ -627,50 +684,220 @@ contract CatalystStakingUpgradeable is Initializable, UUPSUpgradeable, AccessCon
         require(isBluechipCollection[collection], "not bluechip");
         require(bluechipWallets[address(0)][_msgSender()], "not enrolled");
         require(IERC721(collection).balanceOf(_msgSender()) > 0, "no token");
-        // simple reward model: baseRewardRate per wallet
         uint256 last = bluechipLastHarvestBlock[address(0)][_msgSender()];
         uint256 blocksElapsed = block.number - last;
         if (blocksElapsed == 0) return;
         uint256 reward = (blocksElapsed * baseRewardRate) / numberOfBlocksPerRewardUnit;
         if (reward == 0) { bluechipLastHarvestBlock[address(0)][_msgSender()] = block.number; return; }
+
+        // enforce cap for this mint
+        uint256 current = cata.totalSupply();
+        require(current + reward <= GLOBAL_CATA_CAP, "CATA: cap exceeded");
         cata.mint(_msgSender(), reward);
+
         bluechipLastHarvestBlock[address(0)][_msgSender()] = block.number;
         emit BluechipHarvested(_msgSender(), collection, reward);
     }
 
     // -----------------------
-    // Utilities & placeholder top-collection maintenance
+    // Governance: create / vote / execute
+    // -----------------------
+    function initGovernanceParams(uint256 votingDurationBlocks_, uint256 minVotesRequiredScaled_, uint256 collectionVoteCapPercent_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(collectionVoteCapPercent_ <= 100, "cap>100");
+        votingDurationBlocks = votingDurationBlocks_;
+        minVotesRequiredScaled = minVotesRequiredScaled_;
+        collectionVoteCapPercent = collectionVoteCapPercent_;
+    }
+
+    function propose(
+        ProposalType pType,
+        uint8 paramTarget,
+        uint256 newValue,
+        address collectionContext
+    ) external whenNotPaused returns (bytes32) {
+        (uint256 weight,) = _votingWeight(_msgSender());
+        require(weight > 0, "Ineligible");
+
+        bytes32 id = keccak256(abi.encodePacked(uint256(pType), paramTarget, newValue, collectionContext, block.number, _msgSender()));
+        Proposal storage p = proposals[id];
+        require(p.startBlock == 0, "Governance: exists");
+
+        p.pType = pType;
+        p.paramTarget = paramTarget;
+        p.newValue = newValue;
+        p.collectionAddress = collectionContext;
+        p.proposer = _msgSender();
+        p.startBlock = block.number;
+        p.endBlock = block.number + votingDurationBlocks;
+        p.votesScaled = 0;
+        p.executed = false;
+
+        if (proposalIndex[id] == 0) {
+            proposalIds.push(id);
+            proposalIndex[id] = proposalIds.length;
+        }
+
+        emit ProposalCreated(id, pType, paramTarget, collectionContext, _msgSender(), newValue, p.startBlock, p.endBlock);
+        return id;
+    }
+
+    function vote(bytes32 id, address attributedCollection) external whenNotPaused {
+        (uint256 weight, ) = _votingWeight(_msgSender());
+        require(weight > 0, "Ineligible");
+        Proposal storage p = proposals[id];
+        require(p.startBlock != 0, "Governance: not found");
+        require(block.number >= p.startBlock && block.number <= p.endBlock, "Governance: closed");
+        require(!p.executed, "Governance: executed");
+        require(!hasVoted[id][_msgSender()], "Governance: voted");
+        require(weight > 0, "Governance: zero weight");
+
+        uint256 cap = (minVotesRequiredScaled * collectionVoteCapPercent) / 100;
+        uint256 cur = proposalCollectionVotesScaled[id][attributedCollection];
+        require(cur + weight <= cap, "Governance: cap");
+
+        hasVoted[id][_msgSender()] = true;
+        p.votesScaled += weight;
+        proposalCollectionVotesScaled[id][attributedCollection] = cur + weight;
+
+        emit VoteCast(id, _msgSender(), weight, attributedCollection);
+    }
+
+    function validateForExecution(bytes32 id) public view returns (Proposal memory) {
+        Proposal memory p = proposals[id];
+        require(p.startBlock != 0, "Governance: not found");
+        require(block.number > p.endBlock, "Governance: voting");
+        require(!p.executed, "Governance: executed");
+        require(p.votesScaled >= minVotesRequiredScaled, "Governance: quorum");
+        return p;
+    }
+
+    function executeProposal(bytes32 id) external whenNotPaused nonReentrant {
+        Proposal memory p = validateForExecution(id);
+        // mark executed
+        proposals[id].executed = true;
+        emit ProposalMarkedExecuted(id);
+
+        // Apply proposals
+        if (p.pType == ProposalType.BASE_REWARD) {
+            uint256 old = baseRewardRate;
+            baseRewardRate = p.newValue;
+            emit BaseRewardRateUpdated(old, baseRewardRate);
+        } else if (p.pType == ProposalType.HARVEST_FEE) {
+            // no stored harvest fee var in current design; emit only for now
+            emit HarvestFeeUpdated(0, p.newValue);
+        } else if (p.pType == ProposalType.UNSTAKE_FEE) {
+            uint256 old = unstakeBurnFee;
+            unstakeBurnFee = p.newValue;
+            emit UnstakeFeeUpdated(old, p.newValue);
+        } else if (p.pType == ProposalType.REGISTRATION_FEE_FALLBACK) {
+            emit RegistrationFeeUpdated(0, p.newValue);
+        } else if (p.pType == ProposalType.VOTING_PARAM) {
+            uint8 t = p.paramTarget;
+            if (t == 0) {
+                uint256 old = minVotesRequiredScaled;
+                minVotesRequiredScaled = p.newValue;
+                emit VotingParamUpdated(t, old, p.newValue);
+            } else if (t == 1) {
+                uint256 old = votingDurationBlocks;
+                votingDurationBlocks = p.newValue;
+                emit VotingParamUpdated(t, old, p.newValue);
+            } else if (t == 2) {
+                uint256 old = collectionVoteCapPercent;
+                collectionVoteCapPercent = p.newValue;
+                emit VotingParamUpdated(t, old, p.newValue);
+            } else revert("BadParam");
+        } else if (p.pType == ProposalType.TIER_UPGRADE) {
+            address col = p.collectionAddress;
+            require(collectionConfigs[col].registered, "NotRegistered");
+            collectionMeta[col].tier = CollectionTier.BLUECHIP;
+            isBluechipCollection[col] = true;
+            emit CollectionTierUpgraded(col, CollectionTier.BLUECHIP);
+        } else {
+            revert("BadParam");
+        }
+
+        emit ProposalExecuted(id, p.newValue);
+    }
+
+    function getProposalInfo(bytes32 id) external view returns (
+        ProposalType pType,
+        uint8 paramTarget,
+        uint256 newValue,
+        address collectionAddress,
+        address proposer,
+        uint256 startBlock,
+        uint256 endBlock,
+        uint256 votesScaled,
+        bool executed
+    ) {
+        Proposal memory p = proposals[id];
+        return (
+            p.pType, p.paramTarget, p.newValue, p.collectionAddress, p.proposer,
+            p.startBlock, p.endBlock, p.votesScaled, p.executed
+        );
+    }
+
+    // -----------------------
+    // Voting weight calculation (uses staking & bluechip)
+    // -----------------------
+    function _votingWeight(address voter) internal view returns (uint256 weight, address attributedCollection) {
+        uint256 len = registeredCollections.length;
+        for (uint256 i = 0; i < len; ++i) {
+            address coll = registeredCollections[i];
+            uint256[] storage port = stakePortfolioByUser[coll][voter];
+            if (port.length == 0) continue;
+            for (uint256 j = 0; j < port.length; ++j) {
+                StakeInfo storage si = stakeLog[coll][voter][port[j]];
+                if (si.currentlyStaked) {
+                    if (minStakeAgeForVoting == 0 || block.number >= si.stakeBlock + minStakeAgeForVoting) {
+                        return (WEIGHT_SCALE, coll);
+                    }
+                }
+            }
+        }
+
+        // Or: enrolled blue-chip + owns at least one token in a bluechip collection
+        for (uint256 i = 0; i < len; ++i) {
+            address coll = registeredCollections[i];
+            if (isBluechipCollection[coll] && (bluechipWallets[coll][voter] || bluechipWallets[address(0)][voter])) {
+                if (IERC721(coll).balanceOf(voter) > 0) {
+                    return (WEIGHT_SCALE, coll);
+                }
+            }
+        }
+
+        return (0, address(0));
+    }
+
+    // -----------------------
+    // Utilities
     // -----------------------
     function registeredCount() external view returns (uint256) { return registeredCollections.length; }
     function eligibleCount() external view returns (uint256) {
         uint256 total = registeredCollections.length;
         if (total == 0) return 0;
-        uint256 count = (total * 10) / 100; // top 10% example
+        uint256 count = (total * 10) / 100;
         if (count == 0) count = 1;
         return count;
     }
 
     function _maybeRebuildTopCollections() internal {
-        // placeholder: simple algorithm omitted for brevity. Implement as needed.
+        // placeholder: implement ranking logic if desired
     }
 
-    // -----------------------
-    // Safe ERC721 receiver to accept NFTs
-    // -----------------------
+    // Receive NFTs
     function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
         return this.onERC721Received.selector;
     }
 
-    // Fallbacks (none)
-}
-
-// Minimal external interfaces used
-interface IERC721 {
-    function safeTransferFrom(address from, address to, uint256 tokenId) external;
-    function balanceOf(address owner) external view returns (uint256);
-    function ownerOf(uint256 tokenId) external view returns (address);
-}
-
-interface IOwnable {
-    function owner() external view returns (address);
+    // Optional convenience getters for cap headroom
+    function cataHeadroom() external view returns (uint256) {
+        uint256 current = cata.totalSupply();
+        if (current >= GLOBAL_CATA_CAP) return 0;
+        return GLOBAL_CATA_CAP - current;
+    }
+    function nftStakeHeadroom() external view returns (uint256) {
+        if (totalStakedNFTsCount >= GLOBAL_NFT_STAKE_CAP) return 0;
+        return GLOBAL_NFT_STAKE_CAP - totalStakedNFTsCount;
+    }
 }
