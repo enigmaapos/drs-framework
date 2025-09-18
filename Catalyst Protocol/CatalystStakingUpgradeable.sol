@@ -9,7 +9,7 @@ Standalone upgradeable staking contract with:
 - fee split (burn / treasury / deployer)
 - blue-chip enrollment & harvest
 - reward minting via CATA token (staking contract must have MINTER_ROLE in CATA)
-- caps: GLOBAL=1,000,000, TERM=750,000, PERM=250,000 (bluechip belongs to perm)
+- caps: GLOBAL= 500,000,000 TERM=375,000,000 PERM=125,000,000 (bluechip belongs to perm)
 */
 
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
