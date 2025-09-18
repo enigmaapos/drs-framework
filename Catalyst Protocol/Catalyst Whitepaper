@@ -1,0 +1,505 @@
+
+Catalyst Whitepaper (Updated Final Version)
+
+Universal Utility & Governance for All NFTs
+
+
+---
+
+1. Introduction
+
+The NFT space has rapidly evolved, but it remains fragmented. Blue-chip collections dominate the spotlight, while thousands of smaller or abandoned projects struggle for relevance. Holders of failed or “junk” NFTs are left with no utility, no governance rights, and no pathway back into the ecosystem.
+
+Catalyst changes this.
+
+We are the first NFT-neutral staking and governance protocol, designed to give universal utility to every ERC-721 token — whether blue-chip, indie, or abandoned.
+
+Catalyst is not a marketplace, nor a speculative platform. Catalyst is an infrastructure layer: a deflationary staking protocol where all NFTs can earn, burn, and participate in governance — with safeguards that protect credibility and sustainability.
+
+👉 And uniquely, Catalyst is the first protocol to implement a Decentralized Recovery System (DRS) — a guardian-based 7-of-5 council model that protects deployer and admin keys from compromise, ensuring the highest level of security in the NFT ecosystem.
+
+---
+
+2. Vision
+
+> > To become the universal utility layer of the NFT ecosystem, where every NFT has value and every collection can contribute to shaping the future of decentralized communities.
+
+And to pioneer security in DeFi/NFT protocols by introducing the first Decentralized Recovery System (DRS), ensuring resilience against admin compromise.
+
+
+---
+
+3. Mission
+
+Empower Holders – Give all NFT owners, from BAYC whales to rug-pull survivors, a way to extract real value.
+
+Balance Incentives – Reward credible collections while still including unverified ones through proof-of-burn mechanics.
+
+Deflationary Tokenomics – Make CATA a sustainable asset through continuous burn mechanics and dynamic fees.
+
+Governance for All – Create a governance model that scales with the ecosystem, balancing top collections with small contributors.
+
+Bridge Legitimacy – Increase blue-chip acceptance by filtering junk responsibly without excluding survivors.
+
+Secure by Design – Establish a new security standard with DRS (7:5 guardian council), protecting deployer and admin keys from compromise.
+
+---
+
+4. Goals
+
+Establish CATA as the core staking & governance token of NFT utility.
+
+Build a dual-tier ecosystem:
+
+Verified collections with full privileges.
+
+Unverified collections that must burn and prove commitment before upgrading.
+
+
+Maintain a deflationary balance between minted rewards and burned CATA.
+
+Provide a transparent, community-driven governance model based on burns and stake-age.
+
+Position Catalyst as the infrastructure standard for NFT staking, governance, and protocol neutrality.
+
+
+
+---
+
+5. Core Philosophy
+
+1. NFT-Neutral Utility – Every ERC-721 is unique on-chain, even if marketplaces call it “junk.”
+
+
+2. Proof-of-Burn Legitimacy – Junk collections must burn extra CATA to join, aligning incentives and discouraging spam.
+
+
+3. Adaptive Governance – Voting eligibility is dynamic, scaling with ecosystem growth.
+
+
+4. Transparency & Fairness – Upgrades from Unverified → Verified require meeting objective on-chain conditions and governance approval.
+
+
+5. Deflationary Economics – Registration fees, harvest burns, unstake burns, and bonus programs continuously destroy supply.
+
+
+6. Guardian Security – Catalyst is the first protocol to integrate a Decentralized Recovery System (DRS), with dual 7:5 guardian councils ensuring recovery without centralization.
+
+
+---
+
+6. Tokenomics (CATA)
+
+Token Name: Catalyst (CATA)
+Type: ERC-20 Utility & Governance Token
+
+Deflationary Mechanics
+
+Harvest burn fee (dynamic % based on protocol load).
+
+Unstake burn fee.
+
+Collection registration fees.
+
+Voluntary burns by users.
+
+
+Emission Mechanics
+
+Staking NFTs mints new CATA.
+
+Base reward rate dynamically adjusts with participation.
+
+> Global staking capacity capped at 500,000,000 NFTs:
+– 375,000,000 Term stakes
+– 125,000,000 Permanent stakes
+
+CATA token supply is hard-capped at 1,000,000,000. At deployment, 100,000,000 CATA were minted to the initial admin. Only the CatalystStakingUpgradeable contract can mint new supply, ensuring emissions are tied exclusively to staking participation and reward mechanics.
+
+
+
+Immutable Fee Distribution
+
+Every protocol fee follows the permanent rule:
+
+90% Burned – permanently reduces supply.
+
+9% Treasury – governance-controlled community pool.
+
+1% Owner (Deployer) – immutable share allocated to the protocol creator/maintainer.
+
+
+Applies to all events: registration, unstake, harvest, and voluntary burns.
+
+Treasury Usage
+
+The Treasury’s 9% share is controlled by governance and may be used for:
+
+Burner bonus distributions.
+
+Future community-approved initiatives (grants, ecosystem support, integrations, audits).
+
+
+Top 1% Burner Bonus
+
+Every cycle (~weekly), the top 1% of wallets ranked by burned CATA receive a bonus from the Treasury.
+
+Eligibility requires:
+
+Minimum burn threshold.
+
+Minimum staked NFTs.
+
+Sybil-resistance (minimum burn per address).
+
+
+The bonus pool is capped (default: 5% of Treasury per cycle).
+
+
+---
+
+7. Collection Tiers 
+
+Verified (Standard)
+
+Normal registration & staking fees.
+
+Full privileges: staking, governance, voting.
+
+Custodial staking inside the protocol.
+
+
+Unverified (Junk / Rug Survivors)
+
+Must pay registration + surcharge escrow.
+
+Reduced governance rights until upgraded.
+
+Upgrade path: burn contribution + stake age + stakers + governance approval.
+
+> If an unverified collection fails to upgrade within the required surcharge forfeit window, its escrow is automatically forfeited. The forfeited escrow is split: 50% burned and 50% allocated to the Treasury.
+
+
+Blue-Chip (Curated / Trusted)
+
+Default assumption: already proven, not required to stake.
+
+Non-custodial model: wallets register directly.
+
+One-time fee per wallet for reward access if not staking.
+
+If they choose to stake instead → same as Verified path, free of the extra wallet fee.
+
+Benefit: avoids custody risks while still earning rewards.
+
+
+
+
+---
+
+8. Governance Model 
+
+Burn-Weighted Collection Governance (BWCG):
+
+Top collections by burned CATA get full voting rights.
+
+Smaller collections participate with fractional weight once burn thresholds are met.
+
+Stake-age requirement prevents flash-stake manipulation.
+
+Per-collection vote cap prevents monopolies.
+
+
+Blue-Chip wallets:
+
+Gain full governance eligibility once the one-time wallet fee is paid or they participate via staking.
+
+No extra weighting beyond normal rules — ensures fairness.
+
+
+
+⚠️ Immutable: 90/9/1 split cannot be changed.
+
+> Governance supports a wide range of proposal types, including:
+– Base reward adjustments
+– Harvest fee updates
+– Unstake fee updates
+– Registration fee fallback
+– Voting parameter changes
+– Tier upgrades for collections
+– Guardian Council reseeding (active/standby batches)
+– DAO upgrades (two-step commit process)
+– Guardian Council contract upgrades (via UUPS)
+– Council lock clearing
+
+Voting weight is derived from the CatalystStaking contract, with votes scaled by stake and burned contributions. A per-collection cap (collectionVoteCapPercent) prevents monopolization by any single collection.
+
+
+---
+
+9. Guardian Council Security System (DRS)
+
+> Catalyst secures its upgradeable contracts using the Batch Guardian Council (BGC) — a two-batch guardian model with 7 guardians in each batch.
+
+– Active Batch: current guardians with operational authority.
+– Standby Batch: pre-seeded guardians, ready to take over in case of compromise.
+
+Recovery Thresholds:
+– 5 of 7 approvals → Recovery valid.
+– 6 of 7 approvals → Raises a Warning and grants the Last Honest Guardian a 48h veto.
+– 7 of 7 approvals → Auto-Lock triggered, Standby batch activated immediately.
+
+DAO-Managed Reseeding: Governance can propose and commit new batches of guardians. Both active and standby sets can be reseeded with a two-step commit and time-bound window, preventing rushed takeovers.
+
+Recovery Proposals: Guardians may propose arbitrary calls (target + calldata) that execute atomically if approved. This allows controlled upgrades, emergency recovery, or parameter resets.
+
+By combining batch failover, commit delays, and last-resort veto, the BGC provides stronger protection than the earlier dual-council model, while keeping Catalyst fully decentralized.
+
+---
+
+10. Security, Scalability, Sustainability 
+
+Security: Guardian-based recovery (7:5 threshold), reentrancy protection, OpenZeppelin UUPS upgradeability.
+
+> – All core modules (ERC20, Staking, Governance, Council) are deployed as UUPS Upgradeable contracts.
+– ReentrancyGuard and Pausable protections ensure operational safety.
+– Immutable 90/9/1 fee split is enforced at contract level and cannot be modified by governance.
+
+Scalability:
+
+Custodial staking handled in StakingLib (lightweight, gas-efficient).
+
+Blue-chip non-custodial rewards handled in core contract (no extra custody overhead).
+
+Per-collection cap = 20,000 NFTs; global staking cap = 1B NFTs.
+
+
+Sustainability: Continuous burn, capped treasury, immutable 90/9/1 split.
+
+
+---
+
+11. Roadmap
+
+Phase 1: Core contract deployment (staking, burning, governance).
+Phase 2: Frontend UI & community dashboard.
+Phase 3: Governance bootstrapping; first upgrade votes.
+Phase 4: Strategic integrations with NFT marketplaces & dApps.
+Phase 5: Expansion of utility — cross-chain staking, DeFi integrations, NFT collateralization.
+
+
+---
+
+
+12. Conclusion 
+
+Catalyst is both a universal NFT utility layer and a guardian-secured protocol.
+
+NFTs gain value: even junk NFTs.
+
+Governance is fair: burn-weighted and capped.
+
+Tokenomics are deflationary: immutable 90/9/1 split.
+
+Security is advanced: Guardian Councils with compromise detection and last-resort protection.
+
+📌 R&D-First Mission
+Catalyst begins as a research & development project, created to stress-test the security, scalability, and sustainability of NFT-integrated protocols. Its primary goal is to help improve the space by experimenting with staking, governance, and decentralized recovery.
+
+Catalyst is not launched as a commercial product — but it is community-governed, meaning the future is open:
+
+The community may choose to keep Catalyst as a pure R&D initiative.
+
+Or evolve it into a sustainable protocol that balances ecosystem growth with incentives for contributors and maintainers.
+
+
+An immutable 1% deployer fee exists to ensure founder sustainability, but beyond that, any expansion, profit models, or treasury allocations are subject to governance.
+
+Catalyst = NFT-neutral utility + sustainable deflation + decentralized recovery.
+
+
+🔧 Technical Appendix — Catalyst Smart Contract Architecture (Aligned with Current Contracts)
+
+
+---
+
+1. Overview
+
+Catalyst is deployed as a modular, upgradeable protocol using the UUPS proxy standard.
+Each major function — staking, governance, council, and token — is separated into its own contract.
+This modularity maximizes upgrade flexibility, minimizes attack surface, and ensures decentralized control.
+
+Immutable Rule:
+All fees follow the 90% Burn / 9% Treasury / 1% Deployer split, enforced at the contract level and unchangeable by governance.
+
+Key Upgrades:
+
+Blue-chip non-custodial enrollment (per-wallet one-time fee).
+
+Verified/Unverified custodial staking (on-chain, capped).
+
+Batch Guardian Council (dual-batch, 7 members each, failover security).
+
+DAO-managed reseeding and council upgrades.
+
+Dynamic rewards and automatic top-collection tracking.
+
+
+
+---
+
+2. Core Contracts
+
+CataERC20Upgradeable.sol
+
+ERC20 utility & governance token.
+
+Max Supply: 1,000,000,000 CATA (hard cap).
+
+Premint: 100,000,000 CATA minted to the initial admin.
+
+Minting: Restricted to the CatalystStakingUpgradeable contract (MINTER_ROLE).
+
+Governance Control: BatchGuardianCouncil can swap admins.
+
+Fully UUPS upgradeable.
+
+
+
+---
+
+CatalystStakingUpgradeable.sol
+
+Custodial NFT staking contract for Verified and Unverified collections.
+
+Supply Caps:
+
+Global: 500,000,000 NFTs
+
+Term: 375,000,000 NFTs
+
+Permanent: 125,000,000 NFTs
+
+
+Collection Tiers:
+
+Unverified (escrow required, subject to forfeits).
+
+Verified (custodial, reduced fees).
+
+Blue-Chip (non-custodial, per-wallet one-time enrollment fee).
+
+
+Fee Split: 90% burned, 9% treasury, 1% deployer.
+
+Supports:
+
+Escrow forfeits for unverified collections.
+
+Proof-of-burn via fee enforcement.
+
+Top % collections tracking (default 10%).
+
+
+Rewards scale dynamically with stake participation.
+
+
+
+---
+
+CatalystGovernanceUpgradeable.sol
+
+On-chain Burn-Weighted Collection Governance (BWCG).
+
+Proposal Types include:
+
+Base reward, harvest fee, and unstake fee updates.
+
+Registration fallback and voting parameter changes.
+
+Collection tier upgrades.
+
+Guardian Council reseeding and activation.
+
+DAO upgrades (two-step commit process).
+
+Guardian Council contract upgrades (UUPS).
+
+Lock clearing.
+
+
+Voting Weight: Derived from staking contributions and burn activity.
+
+Per-Collection Vote Cap: Prevents monopolization by any single collection.
+
+Fully UUPS upgradeable, governed by BatchGuardianCouncil.
+
+
+
+---
+
+BatchGuardianCouncilUpgradeable.sol
+
+Security backbone of Catalyst.
+
+Dual-Batch Model:
+
+Active Batch (7 guardians) controls authority.
+
+Standby Batch (7 guardians) pre-seeded for automatic failover.
+
+
+Threshold Rules:
+
+5 of 7 approvals → Recovery valid.
+
+6 of 7 approvals → Warning triggered + Last Honest Guardian veto (48h).
+
+7 of 7 approvals → Auto-lock + standby activation.
+
+
+DAO-Managed Reseeding: Governance can commit new guardian batches (two-step commit, expiry enforced).
+
+Recovery Proposals: Guardians can execute arbitrary calls (target + calldata) for upgrades or emergency recovery.
+
+UUPS upgradeable under DAO authority.
+
+
+
+---
+
+3. Security & Upgradeability
+
+All contracts: UUPSUpgradeable + AccessControlUpgradeable.
+
+Guardian-managed admin swaps prevent single points of failure.
+
+ReentrancyGuard and Pausable applied across modules.
+
+Immutable Economics: 90/9/1 fee split hard-coded at contract level, not subject to governance change.
+
+Failover Mechanism: Standby guardian batch ensures automatic continuity in case of compromise.
+
+
+
+---
+
+4. Whitepaper Alignment
+
+This modular architecture replaces the older monolithic + library design.
+Instead of embedding all functionality in a single contract, Catalyst now operates as a suite of interoperable modules:
+
+Custodial staking → Verified/Unverified collections.
+
+Non-custodial staking → Blue-chip enrollment.
+
+Immutable fee split → 90% Burn / 9% Treasury / 1% Deployer.
+
+Governance → Burn-weighted with collection vote caps.
+
+Council → BatchGuardianCouncil (dual-batch, auto-failover).
+
+Treasury → 9% allocation, supporting grants, audits, ecosystem growth.
+
+Upgradeable → via UUPS standard, governed by council + DAO.
+  
