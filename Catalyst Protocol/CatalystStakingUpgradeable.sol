@@ -42,9 +42,9 @@ contract CatalystStakingUpgradeable is
     address public council;           // guardian council address (for swapAdmin)
 
     // ---------- Caps (NFTs) ----------
-    uint256 public constant GLOBAL_NFT_CAP = 1_000_000;
-    uint256 public constant TERM_NFT_CAP = 750_000;
-    uint256 public constant PERM_NFT_CAP = 250_000;
+    uint256 public constant GLOBAL_NFT_CAP = 500_000_000;
+uint256 public constant TERM_NFT_CAP   = 375_000_000;
+uint256 public constant PERM_NFT_CAP   = 275_000_000;
 
     // ---------- Fee split BPs ----------
     uint256 public constant BP_DENOM = 10000;
