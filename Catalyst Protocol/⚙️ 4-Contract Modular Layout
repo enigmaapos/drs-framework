@@ -7,25 +7,32 @@
 
 1. CATA.sol (ERC20Upgradeable)
 
-Base: ERC20Upgradeable, AccessControlUpgradeable, UUPSUpgradeable.
+Base: ERC20Upgradeable, AccessControlUpgradeable, UUPSUpgradeable
 
 Roles:
 
-DEFAULT_ADMIN_ROLE → GuardianCouncil.
+DEFAULT_ADMIN_ROLE = GuardianCouncil
 
-MINTER_ROLE → CatalystStaking (assigned by GuardianCouncil).
+MINTER_ROLE = CatalystStaking (assigned by GuardianCouncil)
 
+Cap: 1B hard global cap (totalSupply() + mint ≤ 1B)
 
-Cap: Hard recyclable global cap = 1B CATA (totalSupply() + mint ≤ cap).
+Minting: only CatalystStaking (MINTER_ROLE)
 
-Minting:
+Burning: open to anyone
 
-Only CatalystStaking can mint rewards (enforced by MINTER_ROLE).
+Initial Mint: 100M → cfg.owner
 
+Role helpers: isAdmin, isMinter, isCouncil (with clear revert messages)
 
-Burning:
+Governance snapshot: getAllAdmins(), getAllMinters(), getGovernanceState()
 
-Any holder can burn().
+Guardian Council: can swap admins in emergencies
+
+Upgradeable pattern: UUPS with no inheritance conflicts
+
+✅ Guardrails on zero addresses for safety.
+
 
 
 
