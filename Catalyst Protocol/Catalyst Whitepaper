@@ -303,17 +303,20 @@ Tokenomics are deflationary: immutable 90/9/1 split.
 
 Security is advanced: Guardian Councils with compromise detection and last-resort protection.
 
-📌 R&D-First Mission
+> 📌 R&D-First Mission
 Catalyst begins as a research & development project, created to stress-test the security, scalability, and sustainability of NFT-integrated protocols. Its primary goal is to help improve the space by experimenting with staking, governance, and decentralized recovery.
 
 Catalyst is not launched as a commercial product — but it is community-governed, meaning the future is open:
+– The community may choose to keep Catalyst as a pure R&D initiative.
+– Or evolve it into a sustainable protocol that balances ecosystem growth with incentives for contributors and maintainers.
 
-The community may choose to keep Catalyst as a pure R&D initiative.
+Clarification — Non-Profit vs Profitability:
+Catalyst itself is not a profit-seeking entity. Most fees are burned, while a portion goes to the community treasury for audits, grants, integrations, and R&D.
+An immutable 1% deployer fee exists to ensure founder sustainability, but beyond that, any expansion, profit models, or treasury allocations are fully subject to governance.
 
-Or evolve it into a sustainable protocol that balances ecosystem growth with incentives for contributors and maintainers.
+This does not prevent participants from creating value: token holders benefit from the deflationary supply, builders can launch services, and communities earn rewards and legitimacy.
 
-
-An immutable 1% deployer fee exists to ensure founder sustainability, but beyond that, any expansion, profit models, or treasury allocations are subject to governance.
+In short, Catalyst is a public-good protocol with non-profit mechanics, while the ecosystem and its participants can still generate profit and long-term value.
 
 Catalyst = NFT-neutral utility + sustainable deflation + decentralized recovery.
 
