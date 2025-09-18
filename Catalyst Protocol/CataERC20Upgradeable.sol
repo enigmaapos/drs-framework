@@ -57,19 +57,19 @@ contract CataERC20Upgradeable is Initializable, ERC20Upgradeable, AccessControlU
 
         _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
         council = council_;
+
+        // ✅ Mint initial supply to the initial admin
+        _mint(initialAdmin, 100_000_000 * 1e18);
     }
 
     // -------------------------
     // Mint & Burn
     // -------------------------
-    /// @notice Mint new tokens (only CatalystStaking via MINTER_ROLE).
-    /// Enforces the 1B global supply cap.
     function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) {
         require(totalSupply() + amount <= MAX_SUPPLY, "CATA: cap exceeded");
         _mint(to, amount);
     }
 
-    /// @notice Burn tokens from caller.
     function burn(uint256 amount) external {
         _burn(msg.sender, amount);
     }
@@ -77,7 +77,6 @@ contract CataERC20Upgradeable is Initializable, ERC20Upgradeable, AccessControlU
     // -------------------------
     // Council Management
     // -------------------------
-    /// @notice Set the council address (only DEFAULT_ADMIN_ROLE).
     function setCouncil(address newCouncil) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newCouncil != address(0), "CATA: zero council");
         address old = council;
@@ -85,16 +84,13 @@ contract CataERC20Upgradeable is Initializable, ERC20Upgradeable, AccessControlU
         emit CouncilSet(old, newCouncil);
     }
 
-    /// @notice Atomically grant new admin and revoke old admin. Called by the guardian council.
     function swapAdmin(address newAdmin, address oldAdmin) external onlyCouncil {
         require(newAdmin != address(0), "CATA: zero new admin");
 
-        // grant new first
         if (!hasRole(DEFAULT_ADMIN_ROLE, newAdmin)) {
             _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         }
 
-        // revoke old second
         if (oldAdmin != address(0) && hasRole(DEFAULT_ADMIN_ROLE, oldAdmin)) {
             _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
         }
