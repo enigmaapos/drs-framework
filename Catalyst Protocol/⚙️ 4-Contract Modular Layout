@@ -23,10 +23,6 @@ Burning: open to anyone
 
 Initial Mint: 100M → cfg.owner
 
-Role helpers: isAdmin, isMinter, isCouncil (with clear revert messages)
-
-Governance snapshot: getAllAdmins(), getAllMinters(), getGovernanceState()
-
 Guardian Council: can swap admins in emergencies
 
 Upgradeable pattern: UUPS with no inheritance conflicts
