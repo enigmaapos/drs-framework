@@ -1,0 +1,63 @@
+🛡 Catalyst Protocol Threat Model
+
+1. DAO Layer (root authority)
+Attacker: Malicious DAO (compromised governance, 51% attack, or key theft).
+Targets:
+Replace guardians.
+Upgrade the council contract.
+Replace DAO with another address.
+Protections:
+None above DAO — DAO is the root of trust.
+Risk is social/governance (token distribution, governance capture).
+
+2. Council Layer (BatchGuardianCouncilUpgradeable)
+Attacker: Colluding guardians (≥ 5/7).
+Targets:
+Catalyst contracts (Staking, ERC20, Governance).
+Potentially the council itself (if self-targeting allowed).
+Protections:
+Threshold: 5-of-7 needed.
+6/7 raises a warning.
+7/7 forces lock + standby activation.
+Last-honest veto: one honest guardian can stop 6/7 collusion.
+DAO can reseed or override if things go bad.
+
+3. Catalyst Contracts (Staking, ERC20, Governance)
+Attacker: The council (via recovery calls).
+Targets:
+swapAdmin → replace admins.
+UUPS upgrade → deploy malicious implementations.
+ERC20 minting cap enforcement (guarded but council can install malicious upgrades).
+Protections:
+Contracts only trust the council (not individual guardians).
+DAO can reseed the council if it misbehaves.
+
+4. Guardians (individuals)
+Attacker: Rogue guardian(s).
+Targets:
+Attempt unilateral proposals.
+With 2–3 colluders: no impact.
+With 5+ colluders: can pass proposals.
+Protections:
+5/7 threshold.
+6/7 → warning + last honest veto.
+7/7 → lock → standby takes over.
+
+5. Users
+Attacker: Malicious stakers, voters, or token holders.
+Targets:
+Try to exploit staking reward logic.
+Try to manipulate governance with flash loans.
+Protections:
+Protocol logic in Staking/Governance.
+Not directly relevant to council-level security, but still an attack surface.
+
+⚖️ Risk Summary
+DAO risk: Absolute root of trust. If DAO is corrupted → whole system can be captured.
+Council risk: Medium. Guardians need 5/7 collusion, mitigated by veto/lock.
+Catalyst contracts risk: Medium. Fully controlled by council, so depend on council integrity.
+User-level risk: Low-to-medium, depends on contract logic (separate audits).
+
+✅ Stability Assessment
+If council can self-target → guardians have emergency flexibility, but also the power to rewrite council.
+If council cannot self-target → DAO is the only root authority. This strengthens separation of powers but introduces DAO-liveness risk.
