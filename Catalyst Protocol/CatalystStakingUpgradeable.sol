@@ -19,6 +19,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 
 interface ICataToken {
     function mint(address to, uint256 amount) external;
@@ -32,6 +33,9 @@ contract CatalystStakingUpgradeable is
     PausableUpgradeable,
     UUPSUpgradeable
 {
+
+using SafeERC20Upgradeable for IERC20Upgradeable;
+
     // ---------- Roles ----------
     bytes32 public constant CONTRACT_ADMIN_ROLE = keccak256("CONTRACT_ADMIN_ROLE");
 
