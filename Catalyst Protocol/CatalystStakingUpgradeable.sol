@@ -730,23 +730,39 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
     }
 
     function harvestBluechip(address collection) external nonReentrant whenNotPaused {
-        require(isBluechipCollection[collection], "not bluechip");
-        require(bluechipWallets[address(0)][msg.sender], "not enrolled");
-        require(IERC721(collection).balanceOf(msg.sender) > 0, "no token");
+    require(isBluechipCollection[collection], "not bluechip");
+    require(bluechipWallets[address(0)][msg.sender], "not enrolled");
+    require(IERC721(collection).balanceOf(msg.sender) > 0, "no token");
 
-        uint256 last = bluechipLastHarvestBlock[address(0)][msg.sender];
-        uint256 blocksElapsed = block.number - last;
-        if (blocksElapsed == 0) return;
-        uint256 reward = (blocksElapsed * baseRewardRate) / numberOfBlocksPerRewardUnit;
-        if (reward == 0) {
-            bluechipLastHarvestBlock[address(0)][msg.sender] = block.number;
-            return;
-        }
+    uint256 last = bluechipLastHarvestBlock[address(0)][msg.sender];
+    uint256 blocksElapsed = block.number - last;
+    if (blocksElapsed == 0) return;
 
-        cata.mint(msg.sender, reward);
+    uint256 reward = (blocksElapsed * baseRewardRate) / numberOfBlocksPerRewardUnit;
+    if (reward == 0) {
         bluechipLastHarvestBlock[address(0)][msg.sender] = block.number;
-        emit BluechipHarvested(msg.sender, collection, reward);
+        return;
     }
+
+    // 🔥 Apply fixed 5% burn (immutable rule for Bluechip harvests)
+    uint256 burnAmt = (reward * 5) / 100; 
+    uint256 payout = reward - burnAmt;
+
+    if (payout > 0) {
+        cata.mint(msg.sender, payout);
+    }
+    if (burnAmt > 0) {
+        cata.mint(address(this), burnAmt);
+        cata.burn(burnAmt);
+        burnedCatalystByCollection[collection] += burnAmt;
+        burnedCatalystByAddress[msg.sender] += burnAmt;
+        lastBurnBlock[msg.sender] = block.number;
+        _updateTopCollectionsOnBurn(collection);
+    }
+
+    bluechipLastHarvestBlock[address(0)][msg.sender] = block.number;
+    emit BluechipHarvested(msg.sender, collection, payout);
+}
 
     // ---------- Utilities & placeholders ----------
     function _updateTopCollectionsOnBurn(address collection) internal {
