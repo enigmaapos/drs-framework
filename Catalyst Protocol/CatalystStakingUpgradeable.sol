@@ -500,86 +500,106 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
 }
 
     // ---------- Staking ----------
-    function termStake(address collection, uint256 tokenId) public nonReentrant whenNotPaused {
-        require(collectionConfigs[collection].registered, "not reg");
-        require(collectionConfigs[collection].totalStaked < MAX_STAKE_PER_COLLECTION, "cap 20k");
+    // ---------- Term Stake ----------
+function termStake(address collection, uint256 tokenId)
+    public
+    nonReentrant
+    whenNotPaused
+{
+    // -------- CHECKS --------
+    require(collectionConfigs[collection].registered, "not reg");
+    require(collectionConfigs[collection].totalStaked < MAX_STAKE_PER_COLLECTION, "cap 20k");
+    require(totalStakedAll + 1 <= GLOBAL_NFT_CAP, "global cap");
+    require(totalStakedTerm + 1 <= TERM_NFT_CAP, "term cap");
 
-        // enforce global caps
-        require(totalStakedAll + 1 <= GLOBAL_NFT_CAP, "global cap");
-        require(totalStakedTerm + 1 <= TERM_NFT_CAP, "term cap");
+    StakeInfo storage info = stakeLog[collection][msg.sender][tokenId];
+    require(!info.currentlyStaked, "already staked");
 
-        IERC721(collection).safeTransferFrom(msg.sender, address(this), tokenId);
+    // -------- EFFECTS --------
+    info.stakeBlock = block.number;
+    info.lastHarvestBlock = block.number;
+    info.currentlyStaked = true;
+    info.isPermanent = false;
+    info.unstakeDeadlineBlock = block.number + termDurationBlocks;
 
-        StakeInfo storage info = stakeLog[collection][msg.sender][tokenId];
-        require(!info.currentlyStaked, "already staked");
+    CollectionConfig storage cfg = collectionConfigs[collection];
+    if (stakePortfolioByUser[collection][msg.sender].length == 0) cfg.totalStakers += 1;
+    cfg.totalStaked += 1;
 
-        info.stakeBlock = block.number;
-        info.lastHarvestBlock = block.number;
-        info.currentlyStaked = true;
-        info.isPermanent = false;
-        info.unstakeDeadlineBlock = block.number + termDurationBlocks;
+    totalStakedAll += 1;
+    totalStakedTerm += 1;
+    totalStakedNFTsCount += 1;
+    baseRewardRate += rewardRateIncrementPerNFT;
 
-        CollectionConfig storage cfg = collectionConfigs[collection];
-        if (stakePortfolioByUser[collection][msg.sender].length == 0) cfg.totalStakers += 1;
-        cfg.totalStaked += 1;
+    stakePortfolioByUser[collection][msg.sender].push(tokenId);
+    indexOfTokenIdInStakePortfolio[collection][tokenId] =
+        stakePortfolioByUser[collection][msg.sender].length - 1;
 
-        totalStakedAll += 1;
-        totalStakedTerm += 1;
-        totalStakedNFTsCount += 1;
-        baseRewardRate += rewardRateIncrementPerNFT;
+    uint256 dynamicWelcome =
+        welcomeBonusBaseRate + (totalStakedNFTsCount * welcomeBonusIncrementPerNFT);
 
-        stakePortfolioByUser[collection][msg.sender].push(tokenId);
-        indexOfTokenIdInStakePortfolio[collection][tokenId] = stakePortfolioByUser[collection][msg.sender].length - 1;
+    // -------- INTERACTIONS --------
+    IERC721(collection).safeTransferFrom(msg.sender, address(this), tokenId);
+    cata.mint(msg.sender, dynamicWelcome);
 
-        uint256 dynamicWelcome = welcomeBonusBaseRate + (totalStakedNFTsCount * welcomeBonusIncrementPerNFT);
-        cata.mint(msg.sender, dynamicWelcome);
+    emit NFTStaked(msg.sender, collection, tokenId);
+}
 
-        emit NFTStaked(msg.sender, collection, tokenId);
+    // ---------- Permanent Stake ----------
+function permanentStake(address collection, uint256 tokenId)
+    public
+    nonReentrant
+    whenNotPaused
+{
+    // -------- CHECKS --------
+    require(collectionConfigs[collection].registered, "not reg");
+    require(collectionConfigs[collection].totalStaked < MAX_STAKE_PER_COLLECTION, "cap 20k");
+    require(totalStakedAll + 1 <= GLOBAL_NFT_CAP, "global cap");
+    require(totalStakedPerm + 1 <= PERM_NFT_CAP, "perm cap");
+
+    uint256 fee = permanentStakeFeeBase;
+    require(cataERC20.balanceOf(msg.sender) >= fee, "insufficient CATA");
+
+    StakeInfo storage info = stakeLog[collection][msg.sender][tokenId];
+    require(!info.currentlyStaked, "already staked");
+
+    // -------- EFFECTS --------
+    info.stakeBlock = block.number;
+    info.lastHarvestBlock = block.number;
+    info.currentlyStaked = true;
+    info.isPermanent = true;
+    info.unstakeDeadlineBlock = 0;
+
+    CollectionConfig storage cfg = collectionConfigs[collection];
+    if (stakePortfolioByUser[collection][msg.sender].length == 0) {
+        cfg.totalStakers += 1;
     }
+    cfg.totalStaked += 1;
 
-    function permanentStake(address collection, uint256 tokenId) public nonReentrant whenNotPaused {
-        require(collectionConfigs[collection].registered, "not reg");
-        require(collectionConfigs[collection].totalStaked < MAX_STAKE_PER_COLLECTION, "cap 20k");
+    totalStakedAll += 1;
+    totalStakedPerm += 1;
+    totalStakedNFTsCount += 1;
+    baseRewardRate += rewardRateIncrementPerNFT;
 
-        // enforce global caps
-        require(totalStakedAll + 1 <= GLOBAL_NFT_CAP, "global cap");
-        require(totalStakedPerm + 1 <= PERM_NFT_CAP, "perm cap");
+    stakePortfolioByUser[collection][msg.sender].push(tokenId);
+    indexOfTokenIdInStakePortfolio[collection][tokenId] =
+        stakePortfolioByUser[collection][msg.sender].length - 1;
 
-        uint256 fee = permanentStakeFeeBase;
-        require(cataERC20.balanceOf(msg.sender) >= fee, "insufficient CATA");
+    uint256 dynamicWelcome =
+        welcomeBonusBaseRate + (totalStakedNFTsCount * welcomeBonusIncrementPerNFT);
 
-        IERC721(collection).safeTransferFrom(msg.sender, address(this), tokenId);
+    // -------- INTERACTIONS --------
+    IERC721(collection).safeTransferFrom(msg.sender, address(this), tokenId);
 
-        StakeInfo storage info = stakeLog[collection][msg.sender][tokenId];
-        require(!info.currentlyStaked, "already staked");
+    // Transfer & split fee (external ERC20 interaction)
+    _splitFeeFromSender(msg.sender, fee, collection, true);
 
-        // transfer & split fee
-        _splitFeeFromSender(msg.sender, fee, collection, true);
+    // Mint welcome bonus
+    cata.mint(msg.sender, dynamicWelcome);
 
-        info.stakeBlock = block.number;
-        info.lastHarvestBlock = block.number;
-        info.currentlyStaked = true;
-        info.isPermanent = true;
-        info.unstakeDeadlineBlock = 0;
-
-        CollectionConfig storage cfg = collectionConfigs[collection];
-        if (stakePortfolioByUser[collection][msg.sender].length == 0) cfg.totalStakers += 1;
-        cfg.totalStaked += 1;
-
-        totalStakedAll += 1;
-        totalStakedPerm += 1;
-        totalStakedNFTsCount += 1;
-        baseRewardRate += rewardRateIncrementPerNFT;
-
-        stakePortfolioByUser[collection][msg.sender].push(tokenId);
-        indexOfTokenIdInStakePortfolio[collection][tokenId] = stakePortfolioByUser[collection][msg.sender].length - 1;
-
-        uint256 dynamicWelcome = welcomeBonusBaseRate + (totalStakedNFTsCount * welcomeBonusIncrementPerNFT);
-        cata.mint(msg.sender, dynamicWelcome);
-
-        emit PermanentStakeFeePaid(msg.sender, fee);
-        emit NFTStaked(msg.sender, collection, tokenId);
-    }
+    emit PermanentStakeFeePaid(msg.sender, fee);
+    emit NFTStaked(msg.sender, collection, tokenId);
+}
 
     function batchTermStake(address collection, uint256[] calldata tokenIds) external {
         require(tokenIds.length > 0 && tokenIds.length <= MAX_HARVEST_BATCH, "batch");
@@ -591,47 +611,61 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
         for (uint256 i = 0; i < tokenIds.length; i++) permanentStake(collection, tokenIds[i]);
     }
 
-    function unstake(address collection, uint256 tokenId) public nonReentrant whenNotPaused {
-        StakeInfo storage info = stakeLog[collection][msg.sender][tokenId];
-        require(info.currentlyStaked, "not staked");
-        if (!info.isPermanent) require(block.number >= info.unstakeDeadlineBlock, "term active");
-
-        _harvest(collection, msg.sender, tokenId);
-
-        require(cataERC20.balanceOf(msg.sender) >= unstakeBurnFee, "fee");
-        _splitFeeFromSender(msg.sender, unstakeBurnFee, collection, true);
-
-        info.currentlyStaked = false;
-
-        uint256[] storage port = stakePortfolioByUser[collection][msg.sender];
-        uint256 idx = indexOfTokenIdInStakePortfolio[collection][tokenId];
-        uint256 last = port.length - 1;
-        if (idx != last) {
-            uint256 lastTokenId = port[last];
-            port[idx] = lastTokenId;
-            indexOfTokenIdInStakePortfolio[collection][lastTokenId] = idx;
-        }
-        port.pop();
-        delete indexOfTokenIdInStakePortfolio[collection][tokenId];
-
-        IERC721(collection).safeTransferFrom(address(this), msg.sender, tokenId);
-
-        CollectionConfig storage cfg = collectionConfigs[collection];
-        if (stakePortfolioByUser[collection][msg.sender].length == 0 && cfg.totalStakers > 0) cfg.totalStakers -= 1;
-        if (cfg.totalStaked > 0) cfg.totalStaked -= 1;
-
-        if (baseRewardRate >= rewardRateIncrementPerNFT) baseRewardRate -= rewardRateIncrementPerNFT;
-
-        totalStakedAll -= 1;
-        totalStakedNFTsCount -= 1;
-        if (info.isPermanent) {
-            if (totalStakedPerm > 0) totalStakedPerm -= 1;
-        } else {
-            if (totalStakedTerm > 0) totalStakedTerm -= 1;
-        }
-
-        emit NFTUnstaked(msg.sender, collection, tokenId);
+    // ---------- Unstake ----------
+function unstake(address collection, uint256 tokenId)
+    public
+    nonReentrant
+    whenNotPaused
+{
+    // -------- CHECKS --------
+    StakeInfo storage info = stakeLog[collection][msg.sender][tokenId];
+    require(info.currentlyStaked, "not staked");
+    if (!info.isPermanent) {
+        require(block.number >= info.unstakeDeadlineBlock, "term active");
     }
+
+    // -------- EFFECTS --------
+    info.currentlyStaked = false;
+
+    uint256[] storage port = stakePortfolioByUser[collection][msg.sender];
+    uint256 idx = indexOfTokenIdInStakePortfolio[collection][tokenId];
+    uint256 last = port.length - 1;
+    if (idx != last) {
+        uint256 lastTokenId = port[last];
+        port[idx] = lastTokenId;
+        indexOfTokenIdInStakePortfolio[collection][lastTokenId] = idx;
+    }
+    port.pop();
+    delete indexOfTokenIdInStakePortfolio[collection][tokenId];
+
+    CollectionConfig storage cfg = collectionConfigs[collection];
+    if (stakePortfolioByUser[collection][msg.sender].length == 0 && cfg.totalStakers > 0) {
+        cfg.totalStakers -= 1;
+    }
+    if (cfg.totalStaked > 0) cfg.totalStaked -= 1;
+
+    if (baseRewardRate >= rewardRateIncrementPerNFT) {
+        baseRewardRate -= rewardRateIncrementPerNFT;
+    }
+
+    totalStakedAll -= 1;
+    totalStakedNFTsCount -= 1;
+    if (info.isPermanent) {
+        if (totalStakedPerm > 0) totalStakedPerm -= 1;
+    } else {
+        if (totalStakedTerm > 0) totalStakedTerm -= 1;
+    }
+
+    // -------- INTERACTIONS --------
+    _harvest(collection, msg.sender, tokenId);
+
+    require(cataERC20.balanceOf(msg.sender) >= unstakeBurnFee, "fee");
+    _splitFeeFromSender(msg.sender, unstakeBurnFee, collection, true);
+
+    IERC721(collection).safeTransferFrom(address(this), msg.sender, tokenId);
+
+    emit NFTUnstaked(msg.sender, collection, tokenId);
+}
 
     function batchUnstake(address collection, uint256[] calldata tokenIds) external {
         uint256 len = tokenIds.length;
@@ -646,35 +680,41 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
         return 10; // 10% for example
     }
 
-    function _harvest(address collection, address user, uint256 tokenId) internal {
-        StakeInfo storage info = stakeLog[collection][user][tokenId];
-        uint256 reward = pendingRewards(collection, user, tokenId);
-        if (reward == 0) {
-            info.lastHarvestBlock = block.number;
-            return;
-        }
-
-        uint256 feeRateBP = _getDynamicHarvestBurnFeeRate();
-        // feeRateBP is percent (0..100) not BP here (kept as earlier design)
-        uint256 burnAmt = (reward * feeRateBP) / 100;
-        uint256 payout = (reward > burnAmt) ? (reward - burnAmt) : 0;
-
-        // Mint reward to user
-        cata.mint(user, payout);
-
-        // Mint+burn for the burned portion to avoid inflating circulating supply
-        if (burnAmt > 0) {
-            cata.mint(address(this), burnAmt);
-            cata.burn(burnAmt);
-            burnedCatalystByCollection[collection] += burnAmt;
-            burnedCatalystByAddress[user] += burnAmt;
-            lastBurnBlock[user] = block.number;
-            _updateTopCollectionsOnBurn(collection);
-        }
-
+    // ---------- Harvest ----------
+function _harvest(address collection, address user, uint256 tokenId) internal {
+    // -------- CHECKS --------
+    StakeInfo storage info = stakeLog[collection][user][tokenId];
+    uint256 reward = pendingRewards(collection, user, tokenId);
+    if (reward == 0) {
         info.lastHarvestBlock = block.number;
-        emit RewardsHarvested(user, collection, payout, burnAmt);
+        return;
     }
+
+    // -------- EFFECTS --------
+    info.lastHarvestBlock = block.number;
+
+    uint256 feeRatePercent = _getDynamicHarvestBurnFeeRate(); // returns 0..100
+    uint256 burnAmt = (reward * feeRatePercent) / 100;
+    uint256 payout = (reward > burnAmt) ? (reward - burnAmt) : 0;
+
+    if (burnAmt > 0) {
+        burnedCatalystByCollection[collection] += burnAmt;
+        burnedCatalystByAddress[user] += burnAmt;
+        lastBurnBlock[user] = block.number;
+        _updateTopCollectionsOnBurn(collection);
+    }
+
+    // -------- INTERACTIONS --------
+    if (payout > 0) {
+        cata.mint(user, payout);
+    }
+    if (burnAmt > 0) {
+        cata.mint(address(this), burnAmt);
+        cata.burn(burnAmt);
+    }
+
+    emit RewardsHarvested(user, collection, payout, burnAmt);
+}
 
     function harvestBatch(address collection, uint256[] calldata tokenIds) external nonReentrant whenNotPaused {
         require(tokenIds.length > 0 && tokenIds.length <= MAX_HARVEST_BATCH, "batch");
