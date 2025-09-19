@@ -464,22 +464,40 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
     }
 
     function forfeitEscrowIfExpired(address collection) external onlyRole(CONTRACT_ADMIN_ROLE) {
-        CollectionMeta storage m = collectionMeta[collection];
-        require(collectionConfigs[collection].registered, "not reg");
-        require(m.tier == CollectionTier.UNVERIFIED, "not unverified");
-        require(block.number >= m.registeredAtBlock + surchargeForfeitBlocks, "not expired");
-        uint256 amt = m.surchargeEscrow;
-        require(amt > 0, "no escrow");
+    CollectionMeta storage m = collectionMeta[collection];
+    require(collectionConfigs[collection].registered, "not reg");
+    require(m.tier == CollectionTier.UNVERIFIED, "not unverified");
+    require(block.number >= m.registeredAtBlock + surchargeForfeitBlocks, "not expired");
 
-        uint256 toBurn = amt / 2;
-        uint256 toTreasury = amt - toBurn;
-        // burn from contract balance
-        cata.burn(toBurn);
-        treasuryBalance += toTreasury;
-        m.surchargeEscrow = 0;
-        emit TreasuryDeposit(address(this), toTreasury);
-        emit EscrowForfeited(collection, toTreasury, toBurn);
+    uint256 amt = m.surchargeEscrow;
+    require(amt > 0, "no escrow");
+
+    // Apply 90/9/1 split
+    uint256 burnAmt = (amt * BURN_BP) / BP_DENOM;        // 90%
+    uint256 treasuryAmt = (amt * TREASURY_BP) / BP_DENOM; // 9%
+    uint256 deployerAmt = amt - burnAmt - treasuryAmt;    // 1%
+
+    // Burn portion
+    if (burnAmt > 0) {
+        cata.burn(burnAmt);
     }
+
+    // Treasury portion
+    if (treasuryAmt > 0) {
+        treasuryBalance += treasuryAmt;
+        emit TreasuryDeposit(address(this), treasuryAmt);
+    }
+
+    // Deployer portion
+    if (deployerAmt > 0) {
+        bool ok = cataERC20.transfer(deployerAddress, deployerAmt);
+        require(ok, "deployer transfer failed");
+    }
+
+    m.surchargeEscrow = 0;
+
+    emit EscrowForfeited(collection, treasuryAmt, burnAmt);
+}
 
     // ---------- Staking ----------
     function termStake(address collection, uint256 tokenId) public nonReentrant whenNotPaused {
