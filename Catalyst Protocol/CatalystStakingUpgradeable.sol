@@ -774,6 +774,24 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
         // placeholder: optionally recompute topCollections periodically
     }
 
+// -----------------------------
+// Admin Utilities
+// -----------------------------
+
+event TreasuryWithdraw(address indexed to, uint256 amount);
+
+function withdrawTreasury(address to, uint256 amount) 
+    external 
+    onlyRole(DEFAULT_ADMIN_ROLE) 
+    nonReentrant 
+{
+    require(to != address(0), "zero");
+    require(amount <= treasuryBalance, "insufficient");
+    treasuryBalance -= amount;
+    cataERC20.safeTransfer(to, amount);
+    emit TreasuryWithdraw(to, amount);
+}
+
     // ---------- Pause control ----------
     function pause() external onlyRole(CONTRACT_ADMIN_ROLE) {
         _pause();
