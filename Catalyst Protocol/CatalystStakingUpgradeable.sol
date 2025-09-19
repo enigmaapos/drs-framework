@@ -737,7 +737,7 @@ function _harvest(address collection, address user, uint256 tokenId) internal {
     // -------- INTERACTIONS --------
     if (reward > 0) {
         cata.mint(user, reward);
-        emit Harvest(user, collection, tokenId, reward);
+        emit RewardsHarvested(user, collection, tokenId, reward);
     }
 }
 
