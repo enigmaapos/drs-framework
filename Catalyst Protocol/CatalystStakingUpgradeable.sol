@@ -151,7 +151,7 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
     event TreasuryDeposit(address indexed from, uint256 amount);
     event CollectionAdded(address indexed collection, uint256 declaredSupply, uint256 baseFee, uint256 escrow, CollectionTier tier);
     event CollectionRemoved(address indexed collection);
-    event EscrowForfeited(address indexed collection, uint256 toTreasury, uint256 burned);
+    event EscrowForfeited(address indexed collection, uint256 toTreasury, uint256 burned, address deployer, uint256 toDeployer);
     event NFTStaked(address indexed who, address indexed collection, uint256 indexed tokenId);
     event NFTUnstaked(address indexed who, address indexed collection, uint256 indexed tokenId);
     event RewardsHarvested(address indexed who, address indexed collection, uint256 payout, uint256 burned);
@@ -477,7 +477,7 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
     require(amt > 0, "no escrow");
 
     // --- EFFECTS ---
-    m.surchargeEscrow = 0; // zero out first for CEI
+    m.surchargeEscrow = 0;
 
     // --- SPLIT ---
     uint256 burnAmt = (amt * BURN_BP) / BP_DENOM;         // 90%
@@ -490,22 +490,20 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
 
     // --- INTERACTIONS ---
     if (burnAmt > 0) {
-        cata.burn(burnAmt); // must burn from this contract’s own balance
-        emit EscrowBurned(collection, burnAmt);
+        cata.burn(burnAmt); 
     }
 
     if (treasuryAmt > 0) {
         treasuryBalance += treasuryAmt;
-        emit TreasuryDeposit(address(this), treasuryAmt);
     }
 
     if (deployerAmt > 0) {
         bool ok = cataERC20.transfer(deployerAddress, deployerAmt);
         require(ok, "deployer transfer failed");
-        emit EscrowDeployerPaid(collection, deployerAddress, deployerAmt);
     }
 
-    emit EscrowForfeited(collection, treasuryAmt, burnAmt);
+    // 🔥 Consolidated log of full split
+    emit EscrowForfeited(collection, treasuryAmt, burnAmt, deployerAddress, deployerAmt);
 }
 
     // ---------- Staking ----------
