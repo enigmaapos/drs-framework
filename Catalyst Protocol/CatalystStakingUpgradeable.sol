@@ -723,7 +723,7 @@ function harvest(address collection, uint256 tokenId)
 }
 
 
-//function _harvest(address collection, address user, uint256 tokenId) internal {
+function _harvest(address collection, address user, uint256 tokenId) internal {
     // -------- CHECKS --------
     StakeInfo storage info = stakeLog[collection][user][tokenId];
     require(info.currentlyStaked, "not staked");
