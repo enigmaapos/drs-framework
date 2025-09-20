@@ -756,16 +756,25 @@ function harvestBatch(address collection, uint256[] calldata tokenIds)
 }  
 
     function pendingRewards(address collection, address owner, uint256 tokenId) public view returns (uint256) {
-        StakeInfo memory info = stakeLog[collection][owner][tokenId];
-        if (!info.currentlyStaked || baseRewardRate == 0 || totalStakedNFTsCount == 0) return 0;
-        if (!info.isPermanent && block.number >= info.unstakeDeadlineBlock) return 0;
-
-        uint256 blocksPassed = block.number - info.lastHarvestBlock;
-        if (blocksPassed == 0) return 0;
-        uint256 numerator = blocksPassed * baseRewardRate;
-        uint256 rewardAmount = (numerator / numberOfBlocksPerRewardUnit) / totalStakedNFTsCount;
-        return rewardAmount;
+    StakeInfo memory info = stakeLog[collection][owner][tokenId];
+    if (!info.currentlyStaked || baseRewardRate == 0) return 0;
+    if (!info.isPermanent && block.number < info.unstakeDeadlineBlock) {
+        // term still active but not ready -> rewards continue
+    } else if (!info.isPermanent && block.number >= info.unstakeDeadlineBlock) {
+        // term expired and not harvested -> no more rewards
+        return 0;
     }
+
+    uint256 blocksPassed = block.number - info.lastHarvestBlock;
+    if (blocksPassed == 0) return 0;
+
+    // ✅ Use same formula as _harvest
+    uint256 reward = blocksPassed * baseRewardRate;
+
+    // ✅ Apply the same 90/10 split preview
+    uint256 userShare = (reward * 90) / 100;
+    return userShare;
+}
 
     // ---------- Bluechip non-custodial ----------
     function setBluechipCollection(address collection, bool isBluechip) external onlyRole(CONTRACT_ADMIN_ROLE) whenNotPaused {
