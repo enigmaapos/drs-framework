@@ -285,42 +285,40 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
 
     /// @dev Transfer total `amount` from payer to contract and split: burn / treasury / deployer
     function _splitFeeFromSender(address payer, uint256 amount, address collection, bool attributeToUser) internal {
-        require(amount > 0, "zero fee");
-        bool ok = cataERC20.transferFrom(payer, address(this), amount);
-        require(ok, "transferFrom failed");
+    require(amount > 0, "zero fee");
+    bool ok = cataERC20.transferFrom(payer, address(this), amount);
+    require(ok, "transferFrom failed");
 
-        uint256 burnAmt = (amount * BURN_BP) / BP_DENOM;
-        uint256 treasuryAmt = (amount * TREASURY_BP) / BP_DENOM;
-        uint256 deployerAmt = amount - burnAmt - treasuryAmt;
+    uint256 burnAmt = (amount * BURN_BP) / BP_DENOM;
+    uint256 treasuryAmt = (amount * TREASURY_BP) / BP_DENOM;
+    uint256 deployerAmt = amount - burnAmt - treasuryAmt;
 
-        // burn (via CATA burn)
-        if (burnAmt > 0) {
-            // approve not needed: cata.burn burns from contract's own balance; but here burn should be from payer?
-            // We already transferred `amount` from payer to this contract, so burning contract-held tokens is correct.
-            cata.burn(burnAmt);
-            burnedCatalystByCollection[collection] += burnAmt;
-            if (attributeToUser) {
-                burnedCatalystByAddress[payer] += burnAmt;
-                lastBurnBlock[payer] = block.number;
-                if (!isParticipating[payer]) {
-                    isParticipating[payer] = true;
-                    participatingWallets.push(payer);
-                }
+    // 🔥 burn
+    if (burnAmt > 0) {
+        cata.burn(burnAmt);
+        burnedCatalystByCollection[collection] += burnAmt;
+        if (attributeToUser) {
+            burnedCatalystByAddress[payer] += burnAmt;
+            lastBurnBlock[payer] = block.number;
+            if (!isParticipating[payer]) {
+                isParticipating[payer] = true;
+                participatingWallets.push(payer);
             }
         }
-
-        // deployer share
-        if (deployerAmt > 0) {
-            bool ok2 = cataERC20.transfer(deployerAddress, deployerAmt);
-            require(ok2, "deployer transfer failed");
-        }
-
-        // treasury share remains in contract's balance
-        if (treasuryAmt > 0) {
-            treasuryBalance += treasuryAmt;
-            emit TreasuryDeposit(payer, treasuryAmt);
-        }
     }
+
+    // 🏦 treasury
+    if (treasuryAmt > 0) {
+        treasuryBalance += treasuryAmt;
+        emit TreasuryDeposit(payer, treasuryAmt);
+    }
+
+    // 👤 deployer
+    if (deployerAmt > 0) {
+        bool ok2 = cataERC20.transfer(deployerAddress, deployerAmt);
+        require(ok2, "deployer transfer failed");
+    }
+}
 
     // ---------- Collection registration (admin-only) ----------
     function setCollectionConfig(address collection, uint256 declaredMaxSupply, CollectionTier tier) external onlyRole(CONTRACT_ADMIN_ROLE) nonReentrant whenNotPaused {
