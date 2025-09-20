@@ -772,7 +772,7 @@ function _harvest(address collection, address user, uint256 tokenId) internal {
     }
 }
 
----------- Harvest Batch ----------
+//---------- Harvest Batch ----------
 function harvestBatch(address collection, uint256[] calldata tokenIds)
     external
     nonReentrant
