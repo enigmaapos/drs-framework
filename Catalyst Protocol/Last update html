@@ -1,5 +1,3 @@
-<!doctype html>
-<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -7,6 +5,7 @@
   <meta name="description" content="Catalyst Protocol dApp — staking, governance, council" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+	<link rel="icon" type="image/png" href="assets/logo.png">
   <style>
     body { background: linear-gradient(180deg,#041024 0%, #061426 100%); }
     .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(6px); }
@@ -23,12 +22,11 @@
         <p class="text-sm text-slate-300">Staking · Governance · Guardian Council</p>
       </div>
       <div class="flex items-center gap-3">
-        <div id="networkBadge" class="px-3 py-1 rounded-md text-sm glass">Network: <span id="networkName">—</span></div>
         <button id="connectBtn" class="px-4 py-2 bg-gradient-to-r from-green-500 to-cyan-400 rounded-md font-semibold text-black">Connect</button>
         <button id="disconnectBtn" class="px-4 py-2 bg-red-500 rounded-md font-semibold text-black hidden">Disconnect</button>
       </div>
     </header>
-
+	
     <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
 
 <!-- Tab Buttons -->
@@ -162,11 +160,23 @@
 <section id="quickstatus" class="tab-content hidden">
   <h2 class="font-semibold mb-3 text-lg text-slate-100">⚡ Quick Status</h2>
 <div class="grid grid-cols-2 gap-3 text-sm">
-  <!-- Card -->
-  <div class="p-3 rounded-xl bg-slate-800/50 shadow-sm border border-slate-700">
-    <div class="text-slate-400 text-xs">Connected</div>
-    <div id="addr" class="font-semibold text-slate-200">Not connected</div>
+<!-- Card -->
+<div class="p-3 rounded-xl bg-slate-800/50 shadow-sm border border-slate-700">
+  <div class="text-slate-400 text-xs">Connected</div>
+  <div class="flex items-center gap-2">
+    <!-- Shortened address -->
+    <span id="addr" 
+          class="font-semibold text-slate-200 cursor-pointer" 
+          title="Not connected">
+      Not connected
+    </span>
+    <!-- Copy button -->
+    <button id="copyAddrBtn" 
+            class="px-2 py-0.5 text-xs bg-slate-700 hover:bg-slate-600 rounded">
+      📋
+    </button>
   </div>
+</div>
 
   <!-- Card -->
   <div class="p-3 rounded-xl bg-slate-800/50 shadow-sm border border-slate-700">
@@ -651,32 +661,104 @@
 
 	<hr class="border-slate-700 my-3" />
 
-<!-- Recovery Info Panel -->
-<div id="recoveryInfo" class="p-4 rounded-xl bg-slate-800/40 border border-slate-700 shadow-sm text-sm space-y-2">
-  <h4 class="font-semibold text-slate-100 text-base">📊 Recovery Status</h4>
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-    <p><span class="text-slate-400">Proposed:</span> <span id="riProposed" class="font-medium text-slate-200">-</span></p>
-    <p><span class="text-slate-400">Approvals:</span> <span id="riApprovals" class="font-medium text-slate-200">-</span></p>
-    <p><span class="text-slate-400">Deadline:</span> <span id="riDeadline" class="font-medium text-slate-200">-</span></p>
-    <p><span class="text-slate-400">Executed:</span> <span id="riExecuted" class="font-medium">-</span></p>
-    <p><span class="text-slate-400">Call Target:</span> <span id="riCallTarget" class="font-mono text-xs text-slate-300">-</span></p>
-    <p><span class="text-slate-400">Call Data:</span> <span id="riCallData" class="font-mono text-xs text-slate-300 break-all">-</span></p>
-    <p><span class="text-slate-400">Guardian:</span> <span id="riGuardian" class="font-medium text-slate-200">-</span></p>
-    <p><span class="text-slate-400">Veto Expiry:</span> <span id="riVetoExpiry" class="font-medium text-slate-200">-</span></p>
-  </div>
+<!-- DAO Info -->
+<h3 class="text-base font-semibold mb-2 text-slate-200 flex items-center gap-2">
+  🏛️ DAO
+</h3>
+<div class="p-3 rounded-lg bg-slate-800/60 shadow text-sm">
+  <div class="text-slate-400 text-xs">DAO Address</div>
+  <div id="daoAddr" class="font-mono text-slate-100 break-all">—</div>
+</div>
+<button id="refreshDaoBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition">
+  🔄 Refresh DAO
+</button>
 
-  <!-- Selector -->
-  <div class="mt-3">
-    <label for="recoveryKind" class="block text-slate-300 text-sm font-medium mb-1">Recovery Kind</label>
-    <select id="recoveryKind" class="w-full p-2 rounded-lg bg-slate-900 text-slate-200 border border-slate-700">
-      <option value="0">Deployer</option>
-      <option value="1">Admin</option>
-    </select>
+<!-- Guardians -->
+<h3 class="text-base font-semibold mt-6 mb-2 text-slate-200 flex items-center gap-2">
+  🛡️ Guardians
+</h3>
+<div class="grid grid-cols-2 gap-3 text-sm">
+  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
+    <div class="text-slate-400 text-xs">Active</div>
+    <pre id="activeGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
   </div>
+  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
+    <div class="text-slate-400 text-xs">Standby</div>
+    <pre id="standbyGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
+  </div>
+</div>
+<button id="refreshGuardiansBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition">
+  🔄 Refresh Guardians
+</button>
 
-  <button id="refreshRecoveryBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold text-white transition">
-    🔄 Refresh Recovery Info
+<!-- Lock Status -->
+<h3 class="text-base font-semibold mt-6 mb-2 text-slate-200 flex items-center gap-2">
+  🔒 Lock Status
+</h3>
+<div class="p-3 rounded-lg bg-slate-800/60 shadow text-sm">
+  <div class="text-slate-400 text-xs">Status</div>
+  <div id="lockStatus" class="font-mono text-slate-100">—</div>
+</div>
+<button id="refreshLockBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition">
+  🔄 Refresh Lock
+</button>
+
+<!-- Recovery State -->
+<h3 class="text-base font-semibold mt-6 mb-2 text-slate-200 flex items-center gap-2">
+  🩹 Recovery State
+</h3>
+<div class="flex items-center gap-2 mb-3">
+  <select id="recoveryKind" class="rounded-lg px-2 py-1 text-sm text-black">
+  <option value="">Select Recovery Kind</option>
+  <option value="0">🟢 Default (0)</option>
+  <option value="1">🛡️ Social (1)</option>
+  <option value="2">👥 Guardian (2)</option>
+  </select>
+  <button id="refreshRecoveryBtn" class="flex-1 p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition">
+    🔄 Refresh Recovery
   </button>
+</div>
+<div class="grid grid-cols-2 gap-3 text-sm">
+  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
+    <div class="text-slate-400 text-xs">Proposed</div>
+    <pre id="riProposed" class="font-mono text-slate-100 whitespace-pre-wrap">—</pre>
+  </div>
+  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
+    <div class="text-slate-400 text-xs">Approvals</div>
+    <pre id="riApprovals" class="font-mono text-slate-100">—</pre>
+  </div>
+  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
+    <div class="text-slate-400 text-xs">Deadline</div>
+    <pre id="riDeadline" class="font-mono text-slate-100">—</pre>
+  </div>
+  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
+    <div class="text-slate-400 text-xs">Executed</div>
+    <pre id="riExecuted" class="font-mono text-slate-100">—</pre>
+  </div>
+  <div class="col-span-2 p-3 rounded-lg bg-slate-800/60 shadow">
+    <div class="text-slate-400 text-xs">Call Target</div>
+    <pre id="riCallTarget" class="font-mono text-slate-100 whitespace-pre-wrap">—</pre>
+  </div>
+  <div class="col-span-2 p-3 rounded-lg bg-slate-800/60 shadow">
+    <div class="text-slate-400 text-xs">Call Data</div>
+    <pre id="riCallData" class="font-mono text-slate-100 whitespace-pre-wrap break-words">—</pre>
+  </div>
+  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
+    <div class="text-slate-400 text-xs">Guardian</div>
+    <pre id="riGuardian" class="font-mono text-slate-100">—</pre>
+  </div>
+  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
+    <div class="text-slate-400 text-xs">Veto Expiry</div>
+    <pre id="riVetoExpiry" class="font-mono text-slate-100">—</pre>
+  </div>
+  <div class="col-span-2 p-3 rounded-lg bg-slate-800/60 shadow">
+    <div class="text-slate-400 text-xs">Nonce</div>
+    <pre id="riNonce" class="font-mono text-slate-100">—</pre>
+  </div>
+  <div class="col-span-2 p-3 rounded-lg bg-slate-800/60 shadow">
+    <div class="text-slate-400 text-xs">Approvers</div>
+    <pre id="riApprovers" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
+  </div>
 </div>
 </div>
 </section>
@@ -898,37 +980,67 @@
     } catch(e){ log('fetchCataBalance err', e && e.message ? e.message : e); }
   }
 
-  // ---------- Connect / Disconnect ----------
-  async function connect(){
-    try {
-      if(!window.ethereum) return alert('No Web3 wallet (install MetaMask)');
-      provider = new ethers.providers.Web3Provider(window.ethereum);
-      await provider.send('eth_requestAccounts', []);
-      signer = provider.getSigner();
-      userAddr = await signer.getAddress();
-      $('addr').innerText = userAddr;
-      const net = await provider.getNetwork();
-      $('networkName').innerText = net.name + ' (' + net.chainId + ')';
-      $('connectBtn').classList.add('hidden');
-      $('disconnectBtn').classList.remove('hidden');
+	  function shortenAddress(addr) {
+  if (!addr) return "Not connected";
+  return addr.slice(0, 6) + "..." + addr.slice(-4);
+}
 
-      // load ABIs & attach
-      await loadABIs();
-      await attachContractsIfSet();
-      log('Connected', userAddr);
-    } catch(e){ log('connect err', e && e.message ? e.message : e); }
-  }
+// ---------- Connect / Disconnect ----------
+async function connect() {
+  try {
+    if (!window.ethereum) return alert('No Web3 wallet (install MetaMask)');
 
-  function disconnect(){
-    provider = signer = userAddr = null;
-    contracts = { cata:null, staking:null, governance:null, council:null };
-    $('addr').innerText = 'Not connected';
-    $('networkName').innerText = '—';
-    $('cataBal').innerText = '—';
-    $('connectBtn').classList.remove('hidden');
-    $('disconnectBtn').classList.add('hidden');
-    log('Disconnected');
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    await provider.send('eth_requestAccounts', []);
+    signer = provider.getSigner();
+    userAddr = await signer.getAddress();
+
+    // Shortened address + tooltip
+    const addrEl = $('addr');
+    addrEl.innerText = shortenAddress(userAddr);
+    addrEl.title = userAddr;
+
+    // Setup copy button
+    $('copyAddrBtn').onclick = () => {
+      navigator.clipboard.writeText(userAddr);
+      alert("✅ Address copied!");
+    };
+
+    // Network
+    const net = await provider.getNetwork();
+    $('networkText').innerText = net.name + " (" + net.chainId + ")";
+
+    // Toggle buttons
+    $('connectBtn').classList.add('hidden');
+    $('disconnectBtn').classList.remove('hidden');
+
+    // Load contracts
+    await loadABIs();
+    await attachContractsIfSet();
+
+    log("Connected", userAddr);
+  } catch (e) {
+    log("connect err", e?.message || e);
   }
+}
+
+function disconnect() {
+  provider = signer = userAddr = null;
+  contracts = { cata: null, staking: null, governance: null, council: null };
+
+  // Reset UI
+  const addrEl = $('addr');
+  addrEl.innerText = "Not connected";
+  addrEl.title = "";
+
+  $('networkText').innerText = "—";
+  $('cataBal').innerText = "—";
+
+  $('connectBtn').classList.remove('hidden');
+  $('disconnectBtn').classList.add('hidden');
+
+  log("Disconnected");
+}
 
   // ---------- CATA functions ----------
   async function cataMint(){
@@ -2028,29 +2140,6 @@ async function vetoRecovery(){
   }
 }
 
-	  async function refreshRecoveryInfo() {
-  try {
-    const kind = parseInt($('recoveryKind').value, 10);
-
-    const [proposed, approvals, deadline, executed, callTarget, callData] =
-      await contracts.council.getRecoveryState(kind);
-
-    const [guardian, expiry] = await contracts.council.getTempVeto();
-
-    $('riProposed').innerText = proposed;
-    $('riApprovals').innerText = approvals;
-    $('riDeadline').innerText = new Date(deadline * 1000).toLocaleString();
-    $('riExecuted').innerText = executed ? "✅ Yes" : "❌ No";
-    $('riCallTarget').innerText = callTarget;
-    $('riCallData').innerText = callData;
-    $('riGuardian').innerText = guardian;
-    $('riVetoExpiry').innerText = expiry > 0 ? new Date(expiry * 1000).toLocaleString() : "-";
-  } catch (e) {
-    alert("Error loading recovery info: " + (e.message || e));
-  }
-}
-
-
 	  // Encode calldata helper
 async function encodeCallData() {
   try {
@@ -2072,6 +2161,122 @@ async function encodeCallData() {
     alert("Error encoding callData: " + (e.message || e));
   }
 }
+
+// -------------------- READ-ONLY HELPERS --------------------
+// DAO
+async function fetchDaoInfo() {
+  try {
+    if (!contracts.council) return alert("Council contract not set");
+
+    const daoAddr = await contracts.council.dao();
+    $('daoAddr').innerText = daoAddr;
+
+    log("fetchDaoInfo done ✅");
+  } catch (e) {
+    console.error("fetchDaoInfo err", e);
+    $('daoAddr').innerText = "Error: " + (e.message || e);
+  }
+}
+
+
+// Guardians
+async function fetchGuardians() {
+  try {
+    if (!contracts.council) return alert("Council contract not set");
+
+    const active = await contracts.council.getActiveGuardians();
+    const standby = await contracts.council.getStandbyGuardians();
+
+    $('activeGuardians').innerText = active.join("\n") || "None";
+    $('standbyGuardians').innerText = standby.join("\n") || "None";
+
+    log("fetchGuardians done ✅");
+  } catch (e) {
+    console.error("fetchGuardians err", e);
+    $('activeGuardians').innerText = "Error loading";
+    $('standbyGuardians').innerText = "Error loading";
+  }
+}
+
+
+// Lock / health
+async function fetchLockStatus() {
+  try {
+    if (!contracts.council) return alert("Council contract not set");
+
+    const locked = await contracts.council.locked();
+    $('lockStatus').innerText = locked ? "🔒 Locked" : "✅ Unlocked";
+
+    log("fetchLockStatus done ✅");
+  } catch (e) {
+    console.error("fetchLockStatus err", e);
+    $('lockStatus').innerText = "Error: " + (e.message || e);
+  }
+}
+
+
+// Recovery approvals (who approved)
+async function fetchRecoveryApprovals(kind) {
+  try {
+    if (!contracts.council) return alert("Council contract not set");
+
+    const nonce = await contracts.council.getRequestNonce(kind);
+    const guardians = await contracts.council.getActiveGuardians();
+
+    const approvedList = [];
+    for (const g of guardians) {
+      const lastApproved = await contracts.council.getLastApprovedNonce(kind, g);
+      if (lastApproved.toString() === nonce.toString()) {
+        approvedList.push(g);
+      }
+    }
+
+    $('riApprovers').innerText = approvedList.length > 0
+      ? approvedList.join("\n")
+      : "None yet";
+
+    log("fetchRecoveryApprovals done ✅");
+  } catch (e) {
+    console.error("fetchRecoveryApprovals err", e);
+    $('riApprovers').innerText = "Error: " + (e.message || e);
+  }
+}
+
+
+// Full recovery state
+async function fetchFullRecoveryState() {
+  try {
+    if (!contracts.council) return alert("Council contract not set");
+
+    const kind = parseInt($('recoveryKind').value, 10);
+    if (isNaN(kind)) return alert("Select a valid recovery kind");
+
+    const [proposed, approvals, deadline, executed, callTarget, callData] =
+      await contracts.council.getRecoveryState(kind);
+
+    const [guardian, expiry] = await contracts.council.getTempVeto();
+    const nonce = await contracts.council.getRequestNonce(kind);
+
+    $('riProposed').innerText = proposed;
+    $('riApprovals').innerText = `${approvals} approvals`;
+    $('riDeadline').innerText = new Date(deadline * 1000).toLocaleString();
+    $('riExecuted').innerText = executed ? "✅ Yes" : "❌ No";
+    $('riCallTarget').innerText = callTarget;
+    $('riCallData').innerText = callData;
+    $('riGuardian').innerText = guardian;
+    $('riVetoExpiry').innerText = expiry > 0 ? new Date(expiry * 1000).toLocaleString() : "-";
+    $('riNonce').innerText = nonce.toString();
+
+    await fetchRecoveryApprovals(kind);
+
+    log("fetchFullRecoveryState done ✅");
+  } catch (e) {
+    console.error("fetchFullRecoveryState err", e);
+    alert("Error loading recovery info: " + (e.message || e));
+  }
+}
+
+
 
 	  
   // ---------- Bind UI on load ----------
@@ -2177,9 +2382,15 @@ $('proposeRecoveryBtn').onclick = proposeRecovery;
 $('approveRecoveryBtn').onclick = approveRecovery;
 $('executeRecoveryBtn').onclick = executeRecovery;
 $('vetoRecoveryBtn').onclick = vetoRecovery;
-$('refreshRecoveryBtn').onclick = refreshRecoveryInfo;
   
 $('encodeCallDataBtn').onclick = encodeCallData;
+
+// Manual refresh button
+// -------------------- BUTTON BINDINGS --------------------
+$('refreshDaoBtn').onclick = fetchDaoInfo;
+$('refreshGuardiansBtn').onclick = fetchGuardians;
+$('refreshLockBtn').onclick = fetchLockStatus;
+$('refreshRecoveryBtn').onclick = fetchFullRecoveryState;
 	  
     log('UI ready');
   });
