@@ -232,66 +232,68 @@ contract BatchGuardianCouncilUpgradeable is
 
     // -------- Recovery Proposals --------
     function proposeRecovery(
-        RecovKind kind,
-        address proposed,
-        address callTarget,
-        bytes calldata callData
-    ) external notLocked onlyActiveG whenNotPaused {
-        if (callTarget == address(0) || callData.length == 0) revert ZeroAddress();
+    RecovKind kind,
+    address proposed,
+    address callTarget,
+    bytes calldata callData
+) external notLocked onlyActiveG whenNotPaused {
+    // --- CHECKS ---
+    if (callTarget == address(0) || callData.length == 0) revert ZeroAddress();
 
-        RecoveryRequest storage R = _recoveryRequests[kind];
-        _resetReq(R, proposed);
-        R.callTarget = callTarget;
-        R.callData = callData;
-        
-        // This is the only place we need to manually update the mapping
-        R.hasApproved[msg.sender] = true;
-        R.approvals = 1;
+    // --- EFFECTS ---
+    _requestNonce[kind] += 1;
+    uint256 nonce = _requestNonce[kind];
 
-        emit RecoveryProposed(kind, msg.sender, proposed, callTarget, R.deadline);
-        emit RecoveryApproved(kind, msg.sender, R.approvals);
-    }
+    RecoveryRequest storage R = _recoveryRequests[kind];
+    R.proposed = proposed;
+    R.approvals = 1; // proposer auto-approves
+    R.deadline = block.timestamp + RECOVERY_WINDOW;
+    R.executed = false;
+    R.callTarget = callTarget;
+    R.callData = callData;
+
+    _lastApprovedNonce[kind][msg.sender] = nonce;
+
+    // --- INTERACTIONS (events/logging only) ---
+    emit RecoveryProposed(kind, msg.sender, proposed, callTarget, R.deadline);
+    emit RecoveryApproved(kind, msg.sender, R.approvals);
+}
 
     function approveRecovery(RecovKind kind) external notLocked onlyActiveG whenNotPaused {
-        RecoveryRequest storage R = _recoveryRequests[kind];
-        if (R.callTarget == address(0)) revert NoActiveRequest();
-        if (R.executed) revert AlreadyApproved();
-        if (block.timestamp > R.deadline) revert RequestExpired();
-        if (R.hasApproved[msg.sender]) revert AlreadyApproved();
+    // --- CHECKS ---
+    RecoveryRequest storage R = _recoveryRequests[kind];
+    if (R.callTarget == address(0)) revert NoActiveRequest();
+    if (R.executed) revert AlreadyExecuted();
+    if (block.timestamp > R.deadline) revert RequestExpired();
 
-        R.hasApproved[msg.sender] = true;
-        R.approvals += 1;
+    uint256 nonce = _requestNonce[kind];
+    if (_lastApprovedNonce[kind][msg.sender] == nonce) revert AlreadyApproved();
 
-        if (R.approvals == GUARDIAN_COUNT - 1) {
-            address last;
-            for (uint256 i; i < GUARDIAN_COUNT; ++i) {
-                address g = activeGuardians[i];
-                if (!R.hasApproved[g]) {
-                    last = g;
-                    break;
-                }
-            }
-            if (last != address(0)) {
-                tempVeto.guardian = last;
-                tempVeto.expiry = block.timestamp + LAST_HONEST_VETO_WINDOW;
-                emit LastHonestAssigned(last, tempVeto.expiry);
+    // --- EFFECTS ---
+    _lastApprovedNonce[kind][msg.sender] = nonce;
+    R.approvals += 1;
+
+    address last = address(0);
+    if (R.approvals == GUARDIAN_COUNT - 1) {
+        for (uint256 i; i < GUARDIAN_COUNT; ++i) {
+            address g = activeGuardians[i];
+            if (_lastApprovedNonce[kind][g] != nonce) {
+                last = g;
+                break;
             }
         }
-
-        if (R.approvals == 6 && !warning) {
-            warning = true;
-            emit WarningRaised(kind, R.approvals);
+        if (last != address(0)) {
+            tempVeto.guardian = last;
+            tempVeto.expiry = block.timestamp + LAST_HONEST_VETO_WINDOW;
         }
-        if (R.approvals == 7 && !locked) {
-            locked = true;
-            emit AutoLocked(kind);
-            _activateStandby();
-            tempVeto.guardian = address(0);
-            tempVeto.expiry = 0;
-        }
-
-        emit RecoveryApproved(kind, msg.sender, R.approvals);
     }
+
+    // --- INTERACTIONS (events/logging only) ---
+    emit RecoveryApproved(kind, msg.sender, R.approvals);
+    if (last != address(0)) {
+        emit LastHonestAssigned(last, tempVeto.expiry);
+    }
+}
 
     function executeRecovery(RecovKind kind) external nonReentrant whenNotPaused {
         RecoveryRequest storage R = _recoveryRequests[kind];
@@ -427,6 +429,11 @@ contract BatchGuardianCouncilUpgradeable is
         }
         emit StandbyActivated(activeGuardians);
     }
+
+// --- added for nonce approach ---
+mapping(RecovKind => uint256) private _requestNonce;
+mapping(RecovKind => mapping(address => uint256)) private _lastApprovedNonce;
+// --- end added ---
     
     uint256[44] private __gap;
 }
