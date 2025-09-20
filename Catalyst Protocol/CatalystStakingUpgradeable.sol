@@ -722,7 +722,6 @@ function harvest(address collection, uint256 tokenId)
     _harvest(collection, msg.sender, tokenId);
 }
 
-
 function _harvest(address collection, address user, uint256 tokenId) internal {
     // -------- CHECKS --------
     StakeInfo storage info = stakeLog[collection][user][tokenId];
@@ -737,37 +736,7 @@ function _harvest(address collection, address user, uint256 tokenId) internal {
 
     // -------- INTERACTIONS --------
     if (reward > 0) {
-        // ✅ User keeps 90%
-        uint256 userShare = (reward * 90) / 100;
-        cata.mint(user, userShare);
-
-        // ✅ Tax = 10%
-        uint256 tax = reward - userShare;
-
-        // Split 90/9/1
-        uint256 burnAmt = (tax * 9000) / 10000;
-        uint256 treasuryAmt = (tax * 900) / 10000;
-        uint256 deployerAmt = tax - burnAmt - treasuryAmt;
-
-        if (burnAmt > 0) {
-            cata.mint(address(this), burnAmt);
-            cata.burn(burnAmt);
-            burnedCatalystByCollection[collection] += burnAmt;
-            burnedCatalystByAddress[user] += burnAmt;
-            lastBurnBlock[user] = block.number;
-            _updateTopCollectionsOnBurn(collection);
-        }
-
-        if (treasuryAmt > 0) {
-            cata.mint(address(this), treasuryAmt);
-            treasuryBalance += treasuryAmt;
-            emit TreasuryDeposit(user, treasuryAmt);
-        }
-
-        if (deployerAmt > 0) {
-            cata.mint(deployerAddress, deployerAmt);
-        }
-
+        uint256 userShare = _applyTaxAndSplit(user, reward, collection);
         emit RewardsHarvested(user, collection, tokenId, userShare);
     }
 }
