@@ -125,7 +125,6 @@ contract CataERC20Upgradeable is
     /// @notice Grant MINTER_ROLE to newMinter. Admin only.
     function setMinter(address newMinter) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newMinter != address(0), "CATA: zero minter");
-        // We intentionally don't revoke others automatically; operator should manage that.
         _grantRole(MINTER_ROLE, newMinter);
         emit MinterSet(address(0), newMinter);
     }
@@ -137,17 +136,6 @@ contract CataERC20Upgradeable is
             _revokeRole(MINTER_ROLE, minter);
             emit MinterRevoked(minter);
         }
-    }
-
-    /// @notice Return list of current minters (uses AccessControlEnumerable).
-    function getMinters() external view returns (address[] memory) {
-        // Renaming to be compatible with AccessControlUpgradeable
-        uint256 count = getRoleMemberCount(MINTER_ROLE);
-        address[] memory list = new address[](count);
-        for (uint256 i = 0; i < count; ++i) {
-            list[i] = getRoleMember(MINTER_ROLE, i);
-        }
-        return list;
     }
 
     // -------------------------
@@ -179,11 +167,11 @@ contract CataERC20Upgradeable is
     // Pause / Unpause (emergency)
     // -------------------------
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _pause(); // PausableUpgradeable already emits Paused event
+        _pause();
     }
 
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _unpause(); // PausableUpgradeable already emits Unpaused event
+        _unpause();
     }
 
     // -------------------------
@@ -192,7 +180,7 @@ contract CataERC20Upgradeable is
     function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
     // -------------------------
-    // ERC20 Hooks (newer OZ hook name _update)
+    // ERC20 Hooks
     // -------------------------
     /// @dev Enforce pause on transfers/mints/burns.
     function _update(address from, address to, uint256 value) internal override(ERC20Upgradeable) {
