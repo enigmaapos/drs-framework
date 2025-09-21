@@ -6,7 +6,6 @@ pragma solidity ^0.8.20;
   ------------------------
   Upgradeable, recyclable capped ERC20 token for production use.
 
-  Key production hardening included:
   - AccessControlEnumerableUpgradeable for role enumeration support.
   - PausableUpgradeable for emergency pause/unpause.
   - explicit setMinter() function and events to assign MINTER_ROLE.
@@ -16,12 +15,6 @@ pragma solidity ^0.8.20;
   - _authorizeUpgrade guarded by DEFAULT_ADMIN_ROLE (use multisig/timelock).
   - initializer only; follow OZ reinitializer conventions for future upgrades.
   - storage gap for future state additions.
-  - events for clarity on mint, burn, recycle actions.
-
-  Deployment notes:
-  1. Initialize with initialize(name, symbol, initialAdmin, councilAddr).
-  2. Set minter contracts using setMinter().
-  3. Move DEFAULT_ADMIN_ROLE to multisig/timelock.
 */
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
@@ -53,14 +46,12 @@ contract CataERC20Upgradeable is
     address public council;
 
     // -------------------------
-    // Events
+    // Events (do not redeclare Paused/Unpaused or role events from OZ)
     // -------------------------
     event AdminSwapped(address indexed oldAdmin, address indexed newAdmin);
     event CouncilSet(address indexed oldCouncil, address indexed newCouncil);
     event MinterSet(address indexed oldMinter, address indexed newMinter);
     event MinterRevoked(address indexed revokedMinter);
-    event Paused(address account);
-    event Unpaused(address account);
 
     // Recyclable Supply Events
     event TokensMinted(address indexed to, uint256 amount, uint256 newTotalSupply);
@@ -78,6 +69,8 @@ contract CataERC20Upgradeable is
     // -------------------------
     // Initializer
     // -------------------------
+    /// @notice Initialize token with name, symbol and initial admin and council.
+    /// @dev initialAdmin will receive initial minted allocation and will have DEFAULT_ADMIN_ROLE.
     function initialize(
         string memory name_,
         string memory symbol_,
@@ -97,25 +90,23 @@ contract CataERC20Upgradeable is
 
         // Initial allocation (configurable if desired)
         _mint(initialAdmin, 100_000_000 * 1e18);
+        emit TokensMinted(initialAdmin, 100_000_000 * 1e18, totalSupply());
     }
 
     // -------------------------
     // Mint & Burn (Recyclable Supply)
     // -------------------------
-    function mint(address to, uint256 amount) 
-        external 
-        onlyRole(MINTER_ROLE) 
-        whenNotPaused 
+    function mint(address to, uint256 amount)
+        external
+        onlyRole(MINTER_ROLE)
+        whenNotPaused
     {
         require(totalSupply() + amount <= MAX_SUPPLY, "CATA: cap exceeded");
         _mint(to, amount);
         emit TokensMinted(to, amount, totalSupply());
     }
 
-    function burn(uint256 amount) 
-        external 
-        whenNotPaused 
-    {
+    function burn(uint256 amount) external whenNotPaused {
         _burn(msg.sender, amount);
         emit TokensBurned(msg.sender, amount, totalSupply());
 
@@ -129,20 +120,33 @@ contract CataERC20Upgradeable is
     }
 
     // -------------------------
-    // Minter management
+    // Minter management (production-safe)
     // -------------------------
+    /// @notice Grant MINTER_ROLE to newMinter. Admin only.
     function setMinter(address newMinter) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newMinter != address(0), "CATA: zero minter");
+        // We intentionally don't revoke others automatically; operator should manage that.
         _grantRole(MINTER_ROLE, newMinter);
         emit MinterSet(address(0), newMinter);
     }
 
+    /// @notice Revoke MINTER_ROLE from an address. Admin only.
     function revokeMinter(address minter) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(minter != address(0), "CATA: zero minter");
         if (hasRole(MINTER_ROLE, minter)) {
             _revokeRole(MINTER_ROLE, minter);
             emit MinterRevoked(minter);
         }
+    }
+
+    /// @notice Return list of current minters (uses AccessControlEnumerable).
+    function getMinters() external view returns (address[] memory) {
+        uint256 count = getRoleMemberCount(MINTER_ROLE);
+        address[] memory list = new address[](count);
+        for (uint256 i = 0; i < count; ++i) {
+            list[i] = getRoleMember(MINTER_ROLE, i);
+        }
+        return list;
     }
 
     // -------------------------
@@ -155,6 +159,7 @@ contract CataERC20Upgradeable is
         emit CouncilSet(old, newCouncil);
     }
 
+    /// @notice Swap admin privileges; callable only by the council contract/address.
     function swapAdmin(address newAdmin, address oldAdmin) external onlyCouncil {
         require(newAdmin != address(0), "CATA: zero new admin");
 
@@ -170,16 +175,14 @@ contract CataERC20Upgradeable is
     }
 
     // -------------------------
-    // Pause / Unpause
+    // Pause / Unpause (emergency)
     // -------------------------
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _pause();
-        emit Paused(msg.sender);
+        _pause(); // PausableUpgradeable already emits Paused event
     }
 
     function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _unpause();
-        emit Unpaused(msg.sender);
+        _unpause(); // PausableUpgradeable already emits Unpaused event
     }
 
     // -------------------------
@@ -188,15 +191,16 @@ contract CataERC20Upgradeable is
     function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
     // -------------------------
-    // ERC20 Hooks
+    // ERC20 Hooks (newer OZ hook name _update)
     // -------------------------
-    function _beforeTokenTransfer(address from, address to, uint256 amount) internal override {
-        super._beforeTokenTransfer(from, to, amount);
+    /// @dev Enforce pause on transfers/mints/burns.
+    function _update(address from, address to, uint256 value) internal override(ERC20Upgradeable) {
         require(!paused(), "CATA: token transfer while paused");
+        super._update(from, to, value);
     }
 
     // -------------------------
-    // Storage gap
+    // Storage gap for future variables
     // -------------------------
     uint256[50] private __gap;
 }
