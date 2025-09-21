@@ -2,23 +2,23 @@
 pragma solidity ^0.8.20;
 
 /*
-  CataERC20Upgradeable.sol
-  ------------------------
-  Upgradeable, recyclable capped ERC20 token for production use.
-
-  - AccessControlEnumerableUpgradeable for role enumeration support.
-  - PausableUpgradeable for emergency pause/unpause.
-  - explicit setMinter() function and events to assign MINTER_ROLE.
-  - mint() protected by MINTER_ROLE and whenNotPaused.
-  - burn() allowed for any holder and whenNotPaused.
-  - Recyclable supply: burned tokens free up minting capacity under MAX_SUPPLY.
-  - _authorizeUpgrade guarded by DEFAULT_ADMIN_ROLE (use multisig/timelock).
-  - initializer only; follow OZ reinitializer conventions for future upgrades.
-  - storage gap for future state additions.
+ * CataERC20Upgradeable.sol
+ * ------------------------
+ * Upgradeable, recyclable capped ERC20 token for production use.
+ *
+ * - AccessControlUpgradeable for role-based access control.
+ * - PausableUpgradeable for emergency pause/unpause.
+ * - explicit setMinter() function and events to assign MINTER_ROLE.
+ * - mint() protected by MINTER_ROLE and whenNotPaused.
+ * - burn() allowed for any holder and whenNotPaused.
+ * - Recyclable supply: burned tokens free up minting capacity under MAX_SUPPLY.
+ * - _authorizeUpgrade guarded by DEFAULT_ADMIN_ROLE (use multisig/timelock).
+ * - initializer only; follow OZ reinitializer conventions for future upgrades.
+ * - storage gap for future state additions.
 */
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -26,7 +26,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 contract CataERC20Upgradeable is
     Initializable,
     ERC20Upgradeable,
-    AccessControlEnumerableUpgradeable,
+    AccessControlUpgradeable,
     PausableUpgradeable,
     UUPSUpgradeable
 {
@@ -46,7 +46,7 @@ contract CataERC20Upgradeable is
     address public council;
 
     // -------------------------
-    // Events (do not redeclare Paused/Unpaused or role events from OZ)
+    // Events
     // -------------------------
     event AdminSwapped(address indexed oldAdmin, address indexed newAdmin);
     event CouncilSet(address indexed oldCouncil, address indexed newCouncil);
@@ -78,7 +78,7 @@ contract CataERC20Upgradeable is
         address council_
     ) external initializer {
         __ERC20_init(name_, symbol_);
-        __AccessControlEnumerable_init();
+        __AccessControl_init();
         __Pausable_init();
         __UUPSUpgradeable_init();
 
@@ -141,6 +141,7 @@ contract CataERC20Upgradeable is
 
     /// @notice Return list of current minters (uses AccessControlEnumerable).
     function getMinters() external view returns (address[] memory) {
+        // Renaming to be compatible with AccessControlUpgradeable
         uint256 count = getRoleMemberCount(MINTER_ROLE);
         address[] memory list = new address[](count);
         for (uint256 i = 0; i < count; ++i) {
