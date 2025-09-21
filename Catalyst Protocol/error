@@ -1,0 +1,281 @@
+DeclarationError: Event with same name and parameter types defined twice.
+--> @openzeppelin/contracts/access/IAccessControl.sol:28:5:
+|
+28 | event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Other declaration is here:
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:18:5:
+|
+18 | event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+DeclarationError: Event with same name and parameter types defined twice.
+--> @openzeppelin/contracts/access/IAccessControl.sol:36:5:
+|
+36 | event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Other declaration is here:
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:26:5:
+|
+26 | event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+DeclarationError: Event with same name and parameter types defined twice.
+--> @openzeppelin/contracts/access/IAccessControl.sol:45:5:
+|
+45 | event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Other declaration is here:
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:35:5:
+|
+35 | event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TypeError: Overriding function return types differ.
+--> @openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol:58:5:
+|
+58 | function _grantRole(bytes32 role, address account) internal virtual override {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Overridden function is here:
+--> @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:204:5:
+|
+204 | function _grantRole(bytes32 role, address account) internal virtual returns (bool) {
+| ^ (Relevant source part starts here and spans across multiple lines).
+
+TypeError: Overriding function return types differ.
+--> @openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol:66:5:
+|
+66 | function _revokeRole(bytes32 role, address account) internal virtual override {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Overridden function is here:
+--> @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:222:5:
+|
+222 | function _revokeRole(bytes32 role, address account) internal virtual returns (bool) {
+| ^ (Relevant source part starts here and spans across multiple lines).
+
+TypeError: Derived contract must override function "getRoleAdmin". Two or more base classes define function with same name and parameter types.
+--> @openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol:14:1:
+|
+14 | abstract contract AccessControlEnumerableUpgradeable is Initializable, IAccessControlEnumerableUpgradeable, AccessControlUpgradeable {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "AccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:125:5:
+|
+125 | function getRoleAdmin(bytes32 role) public view virtual returns (bytes32) {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "IAccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:48:5:
+|
+48 | function getRoleAdmin(bytes32 role) external view returns (bytes32);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TypeError: Derived contract must override function "grantRole". Two or more base classes define function with same name and parameter types.
+--> @openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol:14:1:
+|
+14 | abstract contract AccessControlEnumerableUpgradeable is Initializable, IAccessControlEnumerableUpgradeable, AccessControlUpgradeable {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "AccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:142:5:
+|
+142 | function grantRole(bytes32 role, address account) public virtual onlyRole(getRoleAdmin(role)) {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "IAccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:60:5:
+|
+60 | function grantRole(bytes32 role, address account) external;
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TypeError: Derived contract must override function "hasRole". Two or more base classes define function with same name and parameter types.
+--> @openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol:14:1:
+|
+14 | abstract contract AccessControlEnumerableUpgradeable is Initializable, IAccessControlEnumerableUpgradeable, AccessControlUpgradeable {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "AccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:96:5:
+|
+96 | function hasRole(bytes32 role, address account) public view virtual returns (bool) {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "IAccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:40:5:
+|
+40 | function hasRole(bytes32 role, address account) external view returns (bool);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TypeError: Derived contract must override function "renounceRole". Two or more base classes define function with same name and parameter types.
+--> @openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol:14:1:
+|
+14 | abstract contract AccessControlEnumerableUpgradeable is Initializable, IAccessControlEnumerableUpgradeable, AccessControlUpgradeable {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "AccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:177:5:
+|
+177 | function renounceRole(bytes32 role, address callerConfirmation) public virtual {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "IAccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:87:5:
+|
+87 | function renounceRole(bytes32 role, address account) external;
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TypeError: Derived contract must override function "revokeRole". Two or more base classes define function with same name and parameter types.
+--> @openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol:14:1:
+|
+14 | abstract contract AccessControlEnumerableUpgradeable is Initializable, IAccessControlEnumerableUpgradeable, AccessControlUpgradeable {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "AccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:157:5:
+|
+157 | function revokeRole(bytes32 role, address account) public virtual onlyRole(getRoleAdmin(role)) {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "IAccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:71:5:
+|
+71 | function revokeRole(bytes32 role, address account) external;
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+DeclarationError: Event with same name and parameter types defined twice.
+--> contracts/CataERC20Upgradeable.sol:62:5:
+|
+62 | event Paused(address account);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Other declaration is here:
+--> @openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol:22:5:
+|
+22 | event Paused(address account);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+DeclarationError: Event with same name and parameter types defined twice.
+--> @openzeppelin/contracts/access/IAccessControl.sol:28:5:
+|
+28 | event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Other declaration is here:
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:18:5:
+|
+18 | event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+DeclarationError: Event with same name and parameter types defined twice.
+--> @openzeppelin/contracts/access/IAccessControl.sol:36:5:
+|
+36 | event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Other declaration is here:
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:26:5:
+|
+26 | event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+DeclarationError: Event with same name and parameter types defined twice.
+--> @openzeppelin/contracts/access/IAccessControl.sol:45:5:
+|
+45 | event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Other declaration is here:
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:35:5:
+|
+35 | event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+DeclarationError: Event with same name and parameter types defined twice.
+--> contracts/CataERC20Upgradeable.sol:63:5:
+|
+63 | event Unpaused(address account);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Note: Other declaration is here:
+--> @openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol:27:5:
+|
+27 | event Unpaused(address account);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TypeError: Function has override specified but does not override anything.
+--> contracts/CataERC20Upgradeable.sol:193:86:
+|
+193 | function _beforeTokenTransfer(address from, address to, uint256 amount) internal override {
+| ^^^^^^^^
+
+TypeError: Derived contract must override function "getRoleAdmin". Two or more base classes define function with same name and parameter types.
+--> contracts/CataERC20Upgradeable.sol:33:1:
+|
+33 | contract CataERC20Upgradeable is
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "AccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:125:5:
+|
+125 | function getRoleAdmin(bytes32 role) public view virtual returns (bytes32) {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "IAccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:48:5:
+|
+48 | function getRoleAdmin(bytes32 role) external view returns (bytes32);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TypeError: Derived contract must override function "grantRole". Two or more base classes define function with same name and parameter types.
+--> contracts/CataERC20Upgradeable.sol:33:1:
+|
+33 | contract CataERC20Upgradeable is
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "AccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:142:5:
+|
+142 | function grantRole(bytes32 role, address account) public virtual onlyRole(getRoleAdmin(role)) {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "IAccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:60:5:
+|
+60 | function grantRole(bytes32 role, address account) external;
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TypeError: Derived contract must override function "hasRole". Two or more base classes define function with same name and parameter types.
+--> contracts/CataERC20Upgradeable.sol:33:1:
+|
+33 | contract CataERC20Upgradeable is
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "AccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:96:5:
+|
+96 | function hasRole(bytes32 role, address account) public view virtual returns (bool) {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "IAccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:40:5:
+|
+40 | function hasRole(bytes32 role, address account) external view returns (bool);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TypeError: Derived contract must override function "renounceRole". Two or more base classes define function with same name and parameter types.
+--> contracts/CataERC20Upgradeable.sol:33:1:
+|
+33 | contract CataERC20Upgradeable is
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "AccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:177:5:
+|
+177 | function renounceRole(bytes32 role, address callerConfirmation) public virtual {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "IAccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:87:5:
+|
+87 | function renounceRole(bytes32 role, address account) external;
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TypeError: Derived contract must override function "revokeRole". Two or more base classes define function with same name and parameter types.
+--> contracts/CataERC20Upgradeable.sol:33:1:
+|
+33 | contract CataERC20Upgradeable is
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "AccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol:157:5:
+|
+157 | function revokeRole(bytes32 role, address account) public virtual onlyRole(getRoleAdmin(role)) {
+| ^ (Relevant source part starts here and spans across multiple lines).
+Note: Definition in "IAccessControlUpgradeable":
+--> @openzeppelin/contracts-upgradeable/access/IAccessControlUpgradeable.sol:71:5:
+|
+71 | function revokeRole(bytes32 role, address account) external;
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TypeError: Member "_beforeTokenTransfer" not found or not visible after argument-dependent lookup in type(contract super CataERC20Upgradeable).
+--> contracts/CataERC20Upgradeable.sol:194:9:
+|
+194 | super._beforeTokenTransfer(from, to, amount);
+| ^^^^^^^^^^^^^^^^^^^^^^^^^^
