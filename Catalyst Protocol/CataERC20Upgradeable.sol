@@ -12,20 +12,16 @@ pragma solidity ^0.8.20;
   - explicit setMinter() function and events to assign MINTER_ROLE.
   - mint() protected by MINTER_ROLE and whenNotPaused.
   - burn() allowed for any holder and whenNotPaused.
+  - Recyclable supply: burned tokens free up minting capacity under MAX_SUPPLY.
   - _authorizeUpgrade guarded by DEFAULT_ADMIN_ROLE (use multisig/timelock).
   - initializer only; follow OZ reinitializer conventions for future upgrades.
   - storage gap for future state additions.
-  - comments + events for operational clarity.
+  - events for clarity on mint, burn, recycle actions.
 
-  IMPORTANT deployment notes (do these AFTER deploying the proxy):
-  1. Initialize contract with initialize(name, symbol, initialAdmin, councilAddr).
-     initialAdmin will receive the initial minted allocation (100_000_000 * 1e18).
-  2. Deploy your CatalystStaking (or other minter) contract.
-  3. Call setMinter(catalystStakingAddress) from DEFAULT_ADMIN_ROLE (initialAdmin).
-  4. (Strongly recommended) Move DEFAULT_ADMIN_ROLE to a multisig/timelock:
-     - grant DEFAULT_ADMIN_ROLE to your multisig/timelock
-     - revoke DEFAULT_ADMIN_ROLE from the deployer EOA
-  5. (Optional) Pause in emergency via pause()/unpause() using admin/multisig.
+  Deployment notes:
+  1. Initialize with initialize(name, symbol, initialAdmin, councilAddr).
+  2. Set minter contracts using setMinter().
+  3. Move DEFAULT_ADMIN_ROLE to multisig/timelock.
 */
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
@@ -54,7 +50,7 @@ contract CataERC20Upgradeable is
     // -------------------------
     // Council
     // -------------------------
-    address public council; // BatchGuardianCouncil contract or governance contract
+    address public council;
 
     // -------------------------
     // Events
@@ -65,6 +61,11 @@ contract CataERC20Upgradeable is
     event MinterRevoked(address indexed revokedMinter);
     event Paused(address account);
     event Unpaused(address account);
+
+    // Recyclable Supply Events
+    event TokensMinted(address indexed to, uint256 amount, uint256 newTotalSupply);
+    event TokensBurned(address indexed from, uint256 amount, uint256 newTotalSupply);
+    event TokensRecycled(uint256 burnedAmount, uint256 newMintableCapacity);
 
     // -------------------------
     // Modifiers
@@ -77,8 +78,6 @@ contract CataERC20Upgradeable is
     // -------------------------
     // Initializer
     // -------------------------
-    /// @notice Initialize token with name, symbol and initial admin and council.
-    /// @dev initialAdmin will receive initial minted allocation and will have DEFAULT_ADMIN_ROLE.
     function initialize(
         string memory name_,
         string memory symbol_,
@@ -93,46 +92,51 @@ contract CataERC20Upgradeable is
         require(initialAdmin != address(0), "CATA: initial admin zero");
         require(council_ != address(0), "CATA: council zero");
 
-        // Grant admin role to initialAdmin
         _grantRole(DEFAULT_ADMIN_ROLE, initialAdmin);
-
-        // Set council
         council = council_;
 
-        // Mint initial allocation to initialAdmin (configurable here)
-        // NOTE: deployer/operator should move admin to multisig/timelock after setup.
+        // Initial allocation (configurable if desired)
         _mint(initialAdmin, 100_000_000 * 1e18);
     }
 
     // -------------------------
-    // Mint & Burn
+    // Mint & Burn (Recyclable Supply)
     // -------------------------
-    /// @notice Mint tokens (only accounts with MINTER_ROLE).
-    /// @dev Cap enforced and mint disabled when paused.
-    function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) whenNotPaused {
+    function mint(address to, uint256 amount) 
+        external 
+        onlyRole(MINTER_ROLE) 
+        whenNotPaused 
+    {
         require(totalSupply() + amount <= MAX_SUPPLY, "CATA: cap exceeded");
         _mint(to, amount);
+        emit TokensMinted(to, amount, totalSupply());
     }
 
-    /// @notice Burn caller's tokens (reduces total supply).
-    function burn(uint256 amount) external whenNotPaused {
+    function burn(uint256 amount) 
+        external 
+        whenNotPaused 
+    {
         _burn(msg.sender, amount);
+        emit TokensBurned(msg.sender, amount, totalSupply());
+
+        uint256 capacity = MAX_SUPPLY - totalSupply();
+        emit TokensRecycled(amount, capacity);
+    }
+
+    /// @notice Returns how many tokens can still be minted under the cap.
+    function getMintableCapacity() public view returns (uint256) {
+        return MAX_SUPPLY - totalSupply();
     }
 
     // -------------------------
-    // Minter management (production-safe)
+    // Minter management
     // -------------------------
-    /// @notice Set a new minter (grant MINTER_ROLE). Callable by DEFAULT_ADMIN_ROLE.
-    /// @dev This function grants MINTER_ROLE to newMinter and emits MinterSet.
-    ///      It does NOT automatically revoke old minters. Operator should revoke old roles if desired.
     function setMinter(address newMinter) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newMinter != address(0), "CATA: zero minter");
-        // track old minter is hard to define if multiple; emit event with newMinter only.
         _grantRole(MINTER_ROLE, newMinter);
         emit MinterSet(address(0), newMinter);
     }
 
-    /// @notice Revoke MINTER_ROLE from an address. Callable by DEFAULT_ADMIN_ROLE.
     function revokeMinter(address minter) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(minter != address(0), "CATA: zero minter");
         if (hasRole(MINTER_ROLE, minter)) {
@@ -144,7 +148,6 @@ contract CataERC20Upgradeable is
     // -------------------------
     // Council Management
     // -------------------------
-    /// @notice Set new council address. Callable by DEFAULT_ADMIN_ROLE.
     function setCouncil(address newCouncil) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newCouncil != address(0), "CATA: zero council");
         address old = council;
@@ -152,8 +155,6 @@ contract CataERC20Upgradeable is
         emit CouncilSet(old, newCouncil);
     }
 
-    /// @notice Swap admin from oldAdmin to newAdmin; callable only by council contract.
-    /// @dev newAdmin will receive DEFAULT_ADMIN_ROLE and oldAdmin will have it revoked.
     function swapAdmin(address newAdmin, address oldAdmin) external onlyCouncil {
         require(newAdmin != address(0), "CATA: zero new admin");
 
@@ -169,7 +170,7 @@ contract CataERC20Upgradeable is
     }
 
     // -------------------------
-    // Pause / Unpause (emergency)
+    // Pause / Unpause
     // -------------------------
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause();
@@ -184,22 +185,18 @@ contract CataERC20Upgradeable is
     // -------------------------
     // UUPS Upgrade Authorization
     // -------------------------
-    /// @notice Authorize an upgrade. IMPORTANT: DEFAULT_ADMIN_ROLE should be a multisig/timelock.
     function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
     // -------------------------
     // ERC20 Hooks
     // -------------------------
-    /// @dev Prevent transfers/mints/burns while paused (PausableUpgradeable provides whenNotPaused hooks).
     function _beforeTokenTransfer(address from, address to, uint256 amount) internal override {
         super._beforeTokenTransfer(from, to, amount);
-
-        // standard pause check (PausableUpgradeable sets _paused)
         require(!paused(), "CATA: token transfer while paused");
     }
 
     // -------------------------
-    // Storage gap for future variables
+    // Storage gap
     // -------------------------
     uint256[50] private __gap;
 }
