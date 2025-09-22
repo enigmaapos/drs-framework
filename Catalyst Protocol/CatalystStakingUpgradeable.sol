@@ -230,6 +230,14 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
         emit CouncilSet(old, newCouncil);
     }
 
+    /// @notice Update the CATA token address (only admin)
+    /// @dev This lets you fix wrong initialization. Be careful: changing staking token
+    ///      after deployment can confuse stakers, so restrict to DEFAULT_ADMIN_ROLE.
+    function setCataToken(address newCata) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newCata != address(0), "CATA: zero address");
+        cataToken = IERC20(newCata);
+    }
+
     function swapAdmin(address newAdmin, address oldAdmin) external onlyCouncil {
         require(newAdmin != address(0), "zero new");
         if (!hasRole(DEFAULT_ADMIN_ROLE, newAdmin)) {
