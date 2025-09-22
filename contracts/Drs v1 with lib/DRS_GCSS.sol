@@ -19,6 +19,9 @@ contract DRS_GCSS {
 
     // -------- Events --------
     event DeployerSet(address indexed oldDeployer, address indexed newDeployer);
+/// @dev Event to track staking deployer syncs
+event StakingDeployerUpdated(address indexed newDeployer);
+  event TokensWithdrawn(address indexed token, address indexed to, uint256 amount);
 
     constructor(
         address initialDeployer,
@@ -47,6 +50,13 @@ contract DRS_GCSS {
         emit DeployerSet(old, next);
     }
 
+/// @notice Optionally sync staking contract’s deployer to match
+function updateStakingDeployer() external {
+    require(council.isGuardian(msg.sender), "Not a guardian");
+    staking.setDeployerAddress(deployerAddress);
+    emit StakingDeployerUpdated(deployerAddress);
+}
+
     // -------- Resets & Params --------
     /// @notice Reset guardian set; if locked, only current deployer can do this.
     function resetDeployerCouncil(address[] calldata guardians, uint8 threshold) external {
@@ -74,6 +84,20 @@ contract DRS_GCSS {
         if (msg.sender != deployerAddress && !council.isGuardian(msg.sender)) revert NotDeployer();
         council.setWindow(newWindow);
     }
+
+/// @notice Withdraw ERC20 tokens (e.g., CATA 1% deployer fee) to current deployer
+function withdraw(address token, uint256 amount) external {
+    if (msg.sender != deployerAddress) revert NotDeployer();
+    IERC20(token).safeTransfer(deployerAddress, amount);
+    emit TokensWithdrawn(token, deployerAddress, amount);
+}
+
+/// @notice Withdraw native ETH (if contract ever receives it)
+function withdrawETH(uint256 amount) external {
+    if (msg.sender != deployerAddress) revert NotDeployer();
+    payable(deployerAddress).transfer(amount);
+    emit TokensWithdrawn(address(0), deployerAddress, amount);
+}
 
     // -------- Views --------
     function councilStatus() external view returns (
