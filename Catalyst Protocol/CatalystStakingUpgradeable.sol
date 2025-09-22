@@ -40,6 +40,7 @@ using SafeERC20Upgradeable for IERC20Upgradeable;
     bytes32 public constant CONTRACT_ADMIN_ROLE = keccak256("CONTRACT_ADMIN_ROLE");
 
     // ---------- External contracts ----------
+IERC20Upgradeable public cataToken;
     ICataToken public cata;           // CATA token (mint & burn)
     IERC20Upgradeable public cataERC20; // ERC20 interface for transfers
     address public deployerAddress;   // receives deployer share from fee split
@@ -164,6 +165,7 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
     event BluechipHarvested(address indexed who, address indexed collection, uint256 amount);
     event AdminSwapped(address indexed oldAdmin, address indexed newAdmin);
     event CouncilSet(address indexed oldCouncil, address indexed newCouncil);
+event CataTokenUpdated(address indexed oldCata, address indexed newCata);
 
     // ---------- Modifiers ----------
     modifier onlyCouncil() {
@@ -230,13 +232,12 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
         emit CouncilSet(old, newCouncil);
     }
 
-    /// @notice Update the CATA token address (only admin)
-    /// @dev This lets you fix wrong initialization. Be careful: changing staking token
-    ///      after deployment can confuse stakers, so restrict to DEFAULT_ADMIN_ROLE.
-    function setCataToken(address newCata) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(newCata != address(0), "CATA: zero address");
-        cataToken = IERC20(newCata);
-    }
+function setCataToken(address newCata) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(newCata != address(0), "CATA: zero address");
+    address old = address(cataToken);
+    cataToken = IERC20Upgradeable(newCata);
+    emit CataTokenUpdated(old, newCata);
+}
 
     function swapAdmin(address newAdmin, address oldAdmin) external onlyCouncil {
         require(newAdmin != address(0), "zero new");
