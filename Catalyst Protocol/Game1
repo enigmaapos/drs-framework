@@ -1,0 +1,129 @@
+Got it 👍 I’ll give you a minimal Spin-and-Earn wheel game in HTML + JS, already wired with MetaMask connection and ERC20 approve/transfer flow. This will be a good starter kit for your ERC20 game — you can run it locally in a browser.
+
+
+---
+
+📂 Files
+
+index.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Spin & Earn Game</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background: #111; color: #eee; }
+    #wheel { width: 300px; height: 300px; border: 8px solid #444; border-radius: 50%; margin: 30px auto; background: conic-gradient(#ff6 0 25%, #6f6 25% 50%, #66f 50% 75%, #f66 75% 100%); }
+    #spinBtn { padding: 12px 20px; font-size: 18px; cursor: pointer; background: #ff6; border: none; border-radius: 8px; margin-top: 20px; }
+    #connectBtn { padding: 10px 16px; margin: 20px; font-size: 16px; cursor: pointer; background: #6f6; border: none; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>🎡 Spin & Earn ERC20</h1>
+  <button id="connectBtn">Connect Wallet</button>
+  <div id="wheel"></div>
+  <button id="spinBtn">Spin</button>
+  <p id="result"></p>
+
+  <script src="https://cdn.jsdelivr.net/npm/ethers/dist/ethers.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
+
+---
+
+app.js
+
+// ===== CONFIG =====
+const tokenAddress = "0xYourERC20Token"; // replace with your ERC20 token
+const gameAddress  = "0xYourGameContract"; // replace with your game contract
+const erc20Abi = [
+  "function approve(address spender, uint256 amount) public returns (bool)",
+  "function decimals() view returns (uint8)"
+];
+const gameAbi = [
+  "function enterSpin(uint256 amount) public"
+];
+const spinCost = "10"; // 10 tokens per spin
+
+// ===== APP =====
+let provider, signer, tokenContract, gameContract;
+
+const connectBtn = document.getElementById("connectBtn");
+const spinBtn = document.getElementById("spinBtn");
+const resultEl = document.getElementById("result");
+
+connectBtn.onclick = async () => {
+  if (window.ethereum) {
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    signer = provider.getSigner();
+    tokenContract = new ethers.Contract(tokenAddress, erc20Abi, signer);
+    gameContract = new ethers.Contract(gameAddress, gameAbi, signer);
+    connectBtn.innerText = "✅ Wallet Connected";
+  } else {
+    alert("Please install MetaMask!");
+  }
+};
+
+spinBtn.onclick = async () => {
+  if (!signer) return alert("Connect wallet first!");
+
+  try {
+    // get decimals of token
+    const decimals = await tokenContract.decimals();
+    const amount = ethers.utils.parseUnits(spinCost, decimals);
+
+    // approve game contract
+    let tx = await tokenContract.approve(gameAddress, amount);
+    await tx.wait();
+
+    // enter spin
+    tx = await gameContract.enterSpin(amount);
+    await tx.wait();
+
+    // Fake random outcome (replace with server or Chainlink VRF)
+    const outcomes = ["🎉 You won 50 tokens!", "⭐ You won 10 tokens!", "💔 Try again"];
+    const result = outcomes[Math.floor(Math.random() * outcomes.length)];
+
+    // Show result
+    resultEl.innerText = result;
+
+    // Animate wheel
+    const wheel = document.getElementById("wheel");
+    let deg = Math.floor(Math.random() * 360) + 720;
+    wheel.style.transition = "transform 3s ease-out";
+    wheel.style.transform = `rotate(${deg}deg)`;
+  } catch (err) {
+    console.error(err);
+    alert("Spin failed. Check console.");
+  }
+};
+
+
+---
+
+🚀 How to run
+
+1. Create a folder, put index.html + app.js inside.
+
+
+2. Replace 0xYourERC20Token and 0xYourGameContract with your token + game contract addresses.
+
+
+3. Open index.html in a browser with MetaMask.
+
+
+4. Click Connect Wallet → Spin.
+
+
+
+⚠️ Right now the “reward” is front-end only (fake random). To make it real, you need a backend or VRF that signs outcomes and a reward contract that verifies + pays.
+
+
+---
+
+Do you want me to also give you a sample Solidity GameContract that works with this demo (so you can deploy right away and actually handle enterSpin)?
+
