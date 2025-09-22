@@ -40,7 +40,6 @@ using SafeERC20Upgradeable for IERC20Upgradeable;
     bytes32 public constant CONTRACT_ADMIN_ROLE = keccak256("CONTRACT_ADMIN_ROLE");
 
     // ---------- External contracts ----------
-IERC20Upgradeable public cataToken;
     ICataToken public cata;           // CATA token (mint & burn)
     IERC20Upgradeable public cataERC20; // ERC20 interface for transfers
     address public deployerAddress;   // receives deployer share from fee split
@@ -198,7 +197,6 @@ event CataTokenUpdated(address indexed oldCata, address indexed newCata);
         council = council_;
         cata = ICataToken(cataToken);
         cataERC20 = IERC20Upgradeable(cataToken);
- cataToken = IERC20Upgradeable(_cataToken);
         deployerAddress = deployerAddr;
 
         // sensible defaults
@@ -233,10 +231,15 @@ event CataTokenUpdated(address indexed oldCata, address indexed newCata);
         emit CouncilSet(old, newCouncil);
     }
 
+
 function setCataToken(address newCata) external onlyRole(DEFAULT_ADMIN_ROLE) {
     require(newCata != address(0), "CATA: zero address");
-    address old = address(cataToken);
-    cataToken = IERC20Upgradeable(newCata);
+    address old = address(cata);
+
+    // update both references
+    cata = ICataToken(newCata);
+    cataERC20 = IERC20Upgradeable(newCata);
+
     emit CataTokenUpdated(old, newCata);
 }
 
