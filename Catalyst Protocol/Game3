@@ -1,0 +1,222 @@
+Perfect 👍 let’s wire this up.
+I’ll give you a ready-to-run HTML + JS Spin Wheel game that connects directly to the BurnPoolGame contract I shared earlier.
+
+
+---
+
+1. Deploy Contract
+
+First, deploy the Solidity contract:
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+interface IERC20 {
+    function transferFrom(address from, address to, uint amount) external returns (bool);
+    function transfer(address to, uint amount) external returns (bool);
+    function decimals() external view returns (uint8);
+}
+
+contract BurnPoolGame {
+    IERC20 public token;
+    address public burnAddress = 0x000000000000000000000000000000000000dEaD;
+    uint256 public totalPool;
+
+    mapping(address => uint256) public deposits;
+
+    constructor(address _token) {
+        token = IERC20(_token);
+    }
+
+    function register(uint256 amount) external {
+        require(amount > 0, "Must send tokens");
+
+        // Take tokens
+        require(token.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+
+        // Burn 70%
+        uint256 burnAmount = (amount * 70) / 100;
+        token.transfer(burnAddress, burnAmount);
+
+        // Add 30% to pool
+        uint256 poolShare = amount - burnAmount;
+        totalPool += poolShare;
+
+        // Track deposit
+        deposits[msg.sender] += amount;
+    }
+
+    function claim(uint256 percent) external {
+        require(percent >= 10 && percent <= 30, "Only 10%–30%");
+        require(deposits[msg.sender] > 0, "Not registered");
+
+        uint256 claimable = (deposits[msg.sender] * percent) / 100;
+        require(totalPool >= claimable, "Not enough pool");
+
+        totalPool -= claimable;
+        deposits[msg.sender] = 0; // one-time claim
+        token.transfer(msg.sender, claimable);
+    }
+}
+
+👉 Deploy this with your ERC20 token address.
+👉 After deployment, remember the contract address.
+
+
+---
+
+2. HTML Game (Spin & Claim)
+
+Save this as index.html:
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Spin & Earn Game</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background: #111; color: #eee; }
+    #wheel { width: 300px; height: 300px; border: 8px solid #444; border-radius: 50%; margin: 30px auto;
+             background: conic-gradient(#ff6 0 33%, #6f6 33% 66%, #66f 66% 100%); }
+    #spinBtn, #registerBtn { padding: 12px 20px; font-size: 18px; cursor: pointer; border: none; border-radius: 8px; margin-top: 20px; }
+    #spinBtn { background: #ff6; }
+    #registerBtn { background: #6f6; }
+    #connectBtn { padding: 10px 16px; margin: 20px; font-size: 16px; cursor: pointer; background: #6cf; border: none; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>🎡 Spin & Earn ERC20 (Pool Game)</h1>
+  <button id="connectBtn">Connect Wallet</button>
+  <div id="wheel"></div>
+  <button id="registerBtn">Register (10 Tokens)</button>
+  <button id="spinBtn">Spin & Claim</button>
+  <p id="result"></p>
+
+  <script src="https://cdn.jsdelivr.net/npm/ethers/dist/ethers.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
+
+---
+
+3. JS Logic (app.js)
+
+// ===== CONFIG =====
+const tokenAddress = "0xYourERC20Token";   // <-- replace
+const gameAddress  = "0xYourGameContract"; // <-- replace after deploy
+
+const erc20Abi = [
+  "function approve(address spender, uint256 amount) public returns (bool)",
+  "function decimals() view returns (uint8)"
+];
+const gameAbi = [
+  "function register(uint256 amount) public",
+  "function claim(uint256 percent) public",
+  "function deposits(address user) view returns (uint256)"
+];
+
+const registerCost = "10"; // 10 tokens
+
+// ===== APP =====
+let provider, signer, tokenContract, gameContract;
+
+const connectBtn   = document.getElementById("connectBtn");
+const registerBtn  = document.getElementById("registerBtn");
+const spinBtn      = document.getElementById("spinBtn");
+const resultEl     = document.getElementById("result");
+
+connectBtn.onclick = async () => {
+  if (window.ethereum) {
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    signer = provider.getSigner();
+    tokenContract = new ethers.Contract(tokenAddress, erc20Abi, signer);
+    gameContract  = new ethers.Contract(gameAddress, gameAbi, signer);
+    connectBtn.innerText = "✅ Wallet Connected";
+  } else {
+    alert("Please install MetaMask!");
+  }
+};
+
+registerBtn.onclick = async () => {
+  if (!signer) return alert("Connect wallet first!");
+  try {
+    const decimals = await tokenContract.decimals();
+    const amount = ethers.utils.parseUnits(registerCost, decimals);
+
+    // approve
+    let tx = await tokenContract.approve(gameAddress, amount);
+    await tx.wait();
+
+    // register
+    tx = await gameContract.register(amount);
+    await tx.wait();
+
+    resultEl.innerText = "✅ Registered with 10 tokens!";
+  } catch (err) {
+    console.error(err);
+    alert("Register failed");
+  }
+};
+
+spinBtn.onclick = async () => {
+  if (!signer) return alert("Connect wallet first!");
+  try {
+    // Fake spin outcome
+    const outcomes = [10, 20, 30]; // percent
+    const percent = outcomes[Math.floor(Math.random() * outcomes.length)];
+
+    // Call claim on contract
+    let tx = await gameContract.claim(percent);
+    await tx.wait();
+
+    // Animate wheel
+    const wheel = document.getElementById("wheel");
+    let deg = Math.floor(Math.random() * 360) + 720;
+    wheel.style.transition = "transform 3s ease-out";
+    wheel.style.transform = `rotate(${deg}deg)`;
+
+    resultEl.innerText = `🎉 You claimed ${percent}% of your deposit from pool!`;
+  } catch (err) {
+    console.error(err);
+    alert("Claim failed");
+  }
+};
+
+
+---
+
+🔑 How it works
+
+Register button → approves + calls register(10 tokens). Contract burns 7, adds 3 to pool.
+
+Spin button → spins wheel, picks random reward (10–30%), calls claim(percent), contract pays from pool.
+
+Rewards come only from pool (30% shared).
+
+Every deposit shrinks supply (deflationary).
+
+
+
+---
+
+⚠️ Important:
+
+This is a demo, not production-safe (no randomness oracle, no anti-abuse, one-claim only).
+
+For real deployment:
+
+Add Chainlink VRF or server-signed randomness.
+
+Add cooldowns / multiple deposits.
+
+Audit before mainnet.
+
+
+
+
+---
+
+👉 Do you want me to also make this offline-demo ready (so you can test without deploying a contract, just fake balance/reward in browser)? That way you can play it locally before wiring to real ERC20.
+
