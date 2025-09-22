@@ -165,6 +165,9 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
     event AdminSwapped(address indexed oldAdmin, address indexed newAdmin);
     event CouncilSet(address indexed oldCouncil, address indexed newCouncil);
 event CataTokenUpdated(address indexed oldCata, address indexed newCata);
+event DeployerAddressUpdated(address indexed oldDeployer, address indexed newDeployer);
+event TreasuryWithdraw(address indexed to, uint256 amount);
+
 
     // ---------- Modifiers ----------
     modifier onlyCouncil() {
@@ -241,6 +244,16 @@ function setCataToken(address newCata) external onlyRole(DEFAULT_ADMIN_ROLE) {
     cataERC20 = IERC20Upgradeable(newCata);
 
     emit CataTokenUpdated(old, newCata);
+}
+
+function setDeployerAddress(address newDeployer) external {
+    require(msg.sender == deployerAddress, "CATA: not current deployer");
+    require(newDeployer != address(0), "CATA: zero address");
+
+    address old = deployerAddress;
+    deployerAddress = newDeployer;
+
+    emit DeployerAddressUpdated(old, newDeployer);
 }
 
     function swapAdmin(address newAdmin, address oldAdmin) external onlyCouncil {
@@ -901,7 +914,6 @@ function _applyTaxAndSplit(address user, uint256 amount, address collection) int
 // Admin Utilities
 // -----------------------------
 
-event TreasuryWithdraw(address indexed to, uint256 amount);
 
 function withdrawTreasury(address to, uint256 amount) 
     external 
