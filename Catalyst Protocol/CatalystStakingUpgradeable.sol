@@ -198,6 +198,7 @@ event CataTokenUpdated(address indexed oldCata, address indexed newCata);
         council = council_;
         cata = ICataToken(cataToken);
         cataERC20 = IERC20Upgradeable(cataToken);
+ cataToken = IERC20Upgradeable(_cataToken);
         deployerAddress = deployerAddr;
 
         // sensible defaults
