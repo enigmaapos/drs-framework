@@ -17,3 +17,5 @@ proxy ca - 0x11D93F284754af1C543F61D7b04784fC974494A4
 staking 
 imp ca - 0x8Ee749FfB31477Cef6dE36b6eeC8a31eBEEDDc89
 proxy ca - 0xa8Dd5EeEcF6eCc4Ff8A06881125ae95C0f777332
+
+remix ide deploy proxy ca guardian council - 0xB57ee0797C3fc0205714a577c02F7205bB89dF30
