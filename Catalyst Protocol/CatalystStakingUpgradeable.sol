@@ -74,6 +74,34 @@ uint256 public constant PERM_NFT_CAP   = 125_000_000;
         uint256 lastTierProposalBlock;
     }
 
+// ---------- Collection / Status ----------
+enum CollectionStatus {
+    NOT_REGISTERED,
+    UNVERIFIED,
+    VERIFIED,
+    BLUECHIP
+}
+
+/// @notice Returns the current status of a collection
+function getCollectionStatus(address collection) external view returns (CollectionStatus) {
+    if (registeredIndex[collection] == 0) {
+        return CollectionStatus.NOT_REGISTERED;
+    }
+
+    CollectionMeta memory meta = collectionMeta[collection];
+
+    if (meta.tier == CollectionTier.UNVERIFIED) {
+        return CollectionStatus.UNVERIFIED;
+    } else if (meta.tier == CollectionTier.VERIFIED) {
+        return CollectionStatus.VERIFIED;
+    } else if (meta.tier == CollectionTier.BLUECHIP) {
+        return CollectionStatus.BLUECHIP;
+    }
+
+    // fallback — should never hit
+    return CollectionStatus.NOT_REGISTERED;
+}
+
     address[] public registeredCollections;
     mapping(address => uint256) public registeredIndex; // 1-based index
     mapping(address => CollectionConfig) public collectionConfigs;
