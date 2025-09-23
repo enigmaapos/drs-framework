@@ -2,10 +2,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Catalyst Protocol — DApp (Production-ready UI)</title>
+	  <script src="https://cdn.tailwindcss.com"></script>
   <meta name="description" content="Catalyst Protocol dApp — staking, governance, council" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
-	<link rel="icon" type="image/png" href="assets/logo.png">
+	<link rel="icon" type="image/png" href="assets/logo.png">	
   <style>
     body { background: linear-gradient(180deg,#041024 0%, #061426 100%); }
     .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(6px); }
@@ -21,9 +20,39 @@
         <h1 class="text-2xl font-bold">Catalyst Protocol</h1>
         <p class="text-sm text-slate-300">Staking · Governance · Guardian Council</p>
       </div>
-      <div class="flex items-center gap-3">
-        <button id="connectBtn" class="px-4 py-2 bg-gradient-to-r from-green-500 to-cyan-400 rounded-md font-semibold text-black">Connect</button>
-        <button id="disconnectBtn" class="px-4 py-2 bg-red-500 rounded-md font-semibold text-black hidden">Disconnect</button>
+      <div class="flex items-center gap-2 text-sm">
+  <!-- Connected Card -->
+  <div class="px-2 py-1 rounded-lg bg-slate-800/70 shadow border border-slate-700">
+    <div class="text-slate-400 text-[10px]">Connected</div>
+    <div class="flex items-center gap-1">
+      <!-- Shortened address -->
+      <span id="addr" 
+            class="font-medium text-slate-100 cursor-pointer text-xs"
+            title="Not connected">
+        Not connected
+      </span>
+      <!-- Copy button -->
+      <button id="copyAddrBtn" 
+              class="px-1 py-0.5 text-[10px] bg-slate-700 hover:bg-slate-600 rounded">
+        📋
+      </button>
+    </div>
+  </div>
+  <!-- Network Card -->
+  <div class="px-2 py-1 rounded-lg bg-slate-800/70 shadow border border-slate-700">
+    <div class="text-slate-400 text-[10px]">Network</div>
+    <div id="networkText" class="font-medium text-slate-100 text-xs">—</div>
+  </div>
+</div>  
+          <!-- Action Buttons -->
+  <div class="flex gap-2 mb-4">
+    <button id="connectBtn" class="px-4 py-2 rounded-lg bg-gradient-to-r from-green-500 to-cyan-400 font-semibold text-black">
+      🔌 Connect Wallet
+    </button>
+    <button id="disconnectBtn" class="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 font-semibold text-black hidden">
+      ❌ Disconnect
+    </button>
+  </div>
       </div>
     </header>
 	
@@ -160,30 +189,6 @@
 <section id="quickstatus" class="tab-content hidden">
   <h2 class="font-semibold mb-3 text-lg text-slate-100">⚡ Quick Status</h2>
 <div class="grid grid-cols-2 gap-3 text-sm">
-<!-- Card -->
-<div class="p-3 rounded-xl bg-slate-800/50 shadow-sm border border-slate-700">
-  <div class="text-slate-400 text-xs">Connected</div>
-  <div class="flex items-center gap-2">
-    <!-- Shortened address -->
-    <span id="addr" 
-          class="font-semibold text-slate-200 cursor-pointer" 
-          title="Not connected">
-      Not connected
-    </span>
-    <!-- Copy button -->
-    <button id="copyAddrBtn" 
-            class="px-2 py-0.5 text-xs bg-slate-700 hover:bg-slate-600 rounded">
-      📋
-    </button>
-  </div>
-</div>
-
-  <!-- Card -->
-  <div class="p-3 rounded-xl bg-slate-800/50 shadow-sm border border-slate-700">
-    <div class="text-slate-400 text-xs">Network</div>
-    <div id="networkText" class="font-semibold text-slate-200">—</div>
-  </div>
-
   <!-- Card -->
   <div class="p-3 rounded-xl bg-slate-800/50 shadow-sm border border-slate-700">
     <div class="text-slate-400 text-xs">CATA Balance</div>
@@ -204,35 +209,118 @@
 </div>
 
   <hr class="my-3 border-slate-700" />
-  <div class="text-xs text-slate-300">Contract Addresses (defaults & localStorage)</div>
-  <div class="mt-2 space-y-2">
-    <input id="addrCata" placeholder="CATA Token Address" class="w-full p-2 rounded bg-black/20 text-sm" />
-    <input id="addrStaking" placeholder="Staking Contract Address" class="w-full p-2 rounded bg-black/20 text-sm" />
-    <input id="addrGovernance" placeholder="Governance Contract Address" class="w-full p-2 rounded bg-black/20 text-sm" />
-    <input id="addrCouncil" placeholder="GuardianCouncil Address" class="w-full p-2 rounded bg-black/20 text-sm" />
-    <div class="flex gap-2">
-      <button id="saveAddrs" class="px-3 py-1 bg-slate-700 rounded text-sm">Save</button>
-      <button id="loadAddrs" class="px-3 py-1 bg-slate-700/50 rounded text-sm">Load</button>
+<div class="glass rounded-xl border border-slate-700 shadow-lg p-4 space-y-4">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <h2 class="text-sm font-semibold text-slate-200">Contract Addresses</h2>
+    <span class="text-[11px] text-slate-400">Defaults & LocalStorage</span>
+  </div>
+
+  <!-- Address Fields -->
+  <div class="space-y-3">
+    <div>
+      <label class="block text-xs text-slate-400 mb-1">CATA Token</label>
+      <input id="addrCata" readonly 
+             class="w-full px-3 py-2 rounded-lg bg-black/30 border border-slate-700/50 
+                    text-sm text-slate-200 focus:outline-none cursor-default" />
+    </div>
+
+    <div>
+      <label class="block text-xs text-slate-400 mb-1">Staking Contract</label>
+      <input id="addrStaking" readonly 
+             class="w-full px-3 py-2 rounded-lg bg-black/30 border border-slate-700/50 
+                    text-sm text-slate-200 focus:outline-none cursor-default" />
+    </div>
+
+    <div>
+      <label class="block text-xs text-slate-400 mb-1">Governance Contract</label>
+      <input id="addrGovernance" readonly 
+             class="w-full px-3 py-2 rounded-lg bg-black/30 border border-slate-700/50 
+                    text-sm text-slate-200 focus:outline-none cursor-default" />
+    </div>
+
+    <div>
+      <label class="block text-xs text-slate-400 mb-1">Guardian Council</label>
+      <input id="addrCouncil" readonly 
+             class="w-full px-3 py-2 rounded-lg bg-black/30 border border-slate-700/50 
+                    text-sm text-slate-200 focus:outline-none cursor-default" />
     </div>
   </div>
 
+  <!-- Actions -->
+  <div class="flex gap-3 pt-2">
+    <button id="saveAddrs" 
+            class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 
+                   text-white font-medium rounded-lg shadow transition-all text-sm flex items-center gap-1">
+      💾 Save
+    </button>
+
+    <button id="loadAddrs" 
+            class="flex-1 px-4 py-2 bg-slate-700/70 hover:bg-slate-600 active:bg-slate-800 
+                   text-slate-100 font-medium rounded-lg shadow transition-all text-sm flex items-center gap-1">
+      📂 Load
+    </button>
+  </div>
+</div>
+
+
   <hr class="my-3 border-slate-700" />
-  <div class="text-xs text-slate-400">CATA Actions</div>
-  <div class="mt-2 space-y-2">
-    <input id="cataMintTo" placeholder="Mint to address" class="w-full p-2 rounded bg-black/20 text-sm" />
-    <input id="cataMintAmt" placeholder="Amount (wei or integer string)" class="w-full p-2 rounded bg-black/20 text-sm" />
+
+	<div class="p-4 rounded-xl bg-slate-800 text-slate-200 space-y-4">
+  <div class="text-lg font-bold text-slate-100">⚡ CATA Actions</div>
+
+  <!-- Burn -->
+  <div>
+    <input id="cataBurnAmt" placeholder="Amount to burn" class="w-full p-2 rounded bg-black/20 text-sm" />
+    <button id="cataBurnBtn" class="mt-2 w-full p-2 bg-red-600 hover:bg-red-500 rounded">
+      🔥 Burn My CATA
+    </button>
+  </div>
+
+  <!-- Admin-only: Pause/Unpause -->
+  <div class="pt-4 border-t border-slate-700">
+    <div class="text-xs text-slate-400 mb-1">Admin Controls</div>
     <div class="flex gap-2">
-      <button id="cataMintBtn" class="flex-1 p-2 bg-indigo-600 rounded">Mint (MINTER_ROLE)</button>
-      <button id="cataBurnBtn" class="flex-1 p-2 bg-red-600 rounded">Burn (self)</button>
+      <button id="pauseBtn" class="flex-1 p-2 bg-yellow-600 hover:bg-yellow-500 rounded">
+        ⏸ Pause
+      </button>
+      <button id="unpauseBtn" class="flex-1 p-2 bg-green-600 hover:bg-green-500 rounded">
+        ▶️ Unpause
+      </button>
     </div>
-    <div class="flex gap-2 mt-2">
+  </div>
+
+  <!-- Council-only: Swap Admin -->
+  <div class="pt-4 border-t border-slate-700">
+    <div class="text-xs text-slate-400 mb-1">Council Actions</div>
+    <div class="flex gap-2">
       <input id="swapNewAdmin" placeholder="New admin address" class="flex-1 p-2 rounded bg-black/20 text-sm" />
       <input id="swapOldAdmin" placeholder="Old admin address (optional)" class="flex-1 p-2 rounded bg-black/20 text-sm" />
     </div>
-    <div class="mt-2">
-      <button id="swapAdminBtn" class="p-2 bg-yellow-500 text-black rounded w-full">Swap Admin (council only)</button>
-    </div>
+    <button id="swapAdminBtn" class="mt-2 w-full p-2 bg-yellow-500 text-black rounded">
+      🔑 Swap Admin
+    </button>
   </div>
+
+  <!-- Transparency -->
+  <div class="pt-4 border-t border-slate-700">
+    <div class="text-xs text-slate-400 mb-1">Transparency</div>
+    <div class="flex flex-col gap-1">
+      <div class="p-2 rounded bg-black/20 text-sm">
+        Remaining Mintable: <span id="cataRemainingMintable" class="font-mono text-green-400">…</span>
+      </div>
+      <div class="p-2 rounded bg-black/20 text-sm">
+        Total Supply: <span id="cataTotalSupply" class="font-mono text-blue-400">…</span>
+      </div>
+      <div class="p-2 rounded bg-black/20 text-sm">
+        Max Supply: <span id="cataMaxSupply" class="font-mono text-yellow-400">…</span>
+      </div>
+    </div>
+    <button id="refreshTransparencyBtn" class="mt-2 w-full p-2 bg-indigo-600 hover:bg-indigo-500 rounded">
+      🔍 Refresh Transparency
+    </button>
+  </div>
+</div>
 </section>
 
     <!-- Collection Registration -->
@@ -838,8 +926,8 @@
   </div>
 
   <!-- load ethers first -->
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+	
   <script>
   /************************************************************************
    * DApp main - dynamic ABI loading + wiring for CATA / Staking /
@@ -866,17 +954,17 @@
 
   // Default addresses (replace with your deployed addresses)
   const DEFAULT_ADDRS = {
-    cata: "0x1234567890abcdef1234567890abcdef12345678",
-    staking: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-    governance: "0x9876543210abcdef9876543210abcdef98765432",
-    council: "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed"
+    cata: "0x605bb62249E1b16049Ca6E69e70BCFEcD88c3E3D",
+    staking: "0xa8Dd5EeEcF6eCc4Ff8A06881125ae95C0f777332",
+    governance: "0x11D93F284754af1C543F61D7b04784fC974494A4",
+    council: "0xDE61892d944Bb9A795e083389c41030EaaEd35ff"
   };
 
-  // App state
-  let provider = null, signer = null, userAddr = null;
+	  // App state
+	  let provider = null, signer = null, userAddr = null;
   let abis = {}, contracts = { cata:null, staking:null, governance:null, council:null };
-
-  const $ = id => document.getElementById(id);
+	  
+const $ = id => document.getElementById(id);
   function log(...args){
     const el = $('logs');
     try {
@@ -972,13 +1060,15 @@
     } catch(e){ log('attachContractsIfSet err', e && e.message ? e.message : e); }
   }
 
-  async function fetchCataBalance(){
-    try {
-      if(!contracts.cata) return;
-      const bal = await contracts.cata.balanceOf(userAddr);
-      $('cataBal').innerText = ethers.utils.formatEther(bal) + ' CATA';
-    } catch(e){ log('fetchCataBalance err', e && e.message ? e.message : e); }
-  }
+  // Fetch CATA Balance (shows in readable numbers, e.g. "1.25 CATA")
+async function fetchCataBalance(){
+try {
+if(!contracts.cata) return;
+const bal = await contracts.cata.balanceOf(userAddr);
+$('cataBal').innerText = ethers.utils.formatEther(bal) + ' CATA';
+} catch(e){ log('fetchCataBalance err', e && e.message ? e.message : e); }
+}
+
 
 	  function shortenAddress(addr) {
   if (!addr) return "Not connected";
@@ -1042,48 +1132,115 @@ function disconnect() {
   log("Disconnected");
 }
 
-  // ---------- CATA functions ----------
-  async function cataMint(){
-    try {
-      if(!contracts.cata) { await attachContractsIfSet(); if(!contracts.cata) return alert('Set CATA contract address'); }
-      const to = $('cataMintTo').value.trim();
-      const amtRaw = $('cataMintAmt').value.trim();
-      if(!to || !amtRaw) return alert('mint: to & amount required');
-      // keep amount as string to avoid precision issues; contract expects uint256 (wei)
-      const tx = await contracts.cata.mint(to, ethers.BigNumber.from(amtRaw));
-      log('cata.mint tx', tx.hash);
-      await tx.wait();
-      log('cata.mint completed');
-      await fetchCataBalance();
-    } catch(e){ log('cataMint err', e && e.message ? e.message : e); }
-  }
 
-  async function cataBurn(){
-    try {
-      if(!contracts.cata) { await attachContractsIfSet(); if(!contracts.cata) return alert('Set CATA contract address'); }
-      const amtRaw = $('cataMintAmt').value.trim(); // reuse input for burn amount (UI convenience)
-      if(!amtRaw) return alert('burn: amount required');
-      const tx = await contracts.cata.burn(ethers.BigNumber.from(amtRaw));
-      log('cata.burn tx', tx.hash);
-      await tx.wait();
-      log('cata.burn completed');
-      await fetchCataBalance();
-    } catch(e){ log('cataBurn err', e && e.message ? e.message : e); }
-  }
+// ---------- CATA functions ----------
+// Burn (any holder) — accepts real numbers (e.g., "1.5" = 1.5 CATA)
+// Burn (any holder) - user enters normal number (e.g. "1.5"), auto converts to wei
+async function cataBurn() {
+  try {
+    if (!contracts.cata) {
+      await attachContractsIfSet();
+      if (!contracts.cata) return alert('Set CATA contract address first');
+    }
 
-  async function cataSwapAdmin(){
-    try {
-      if(!contracts.cata) { await attachContractsIfSet(); if(!contracts.cata) return alert('Set CATA contract address'); }
-      const newAdmin = $('swapNewAdmin').value.trim();
-      const oldAdmin = $('swapOldAdmin').value.trim() || ethers.constants.AddressZero;
-      if(!newAdmin) return alert('new admin required');
-      // only callable by guardian council per contract; it will revert if caller not council
-      const tx = await contracts.cata.swapAdmin(newAdmin, oldAdmin);
-      log('cata.swapAdmin tx', tx.hash);
-      await tx.wait();
-      log('cata.swapAdmin completed');
-    } catch(e){ log('cataSwapAdmin err', e && e.message ? e.message : e); }
+    const amtRaw = $('cataBurnAmt').value.trim();
+    if (!amtRaw) return alert('Burn amount required');
+
+    // ✅ convert normal number to wei
+    const amtWei = ethers.utils.parseEther(amtRaw);
+
+    const tx = await contracts.cata.burn(amtWei);
+    log('cata.burn tx', tx.hash);
+    await tx.wait();
+    log('cata.burn completed');
+
+    await fetchCataBalance();
+    await fetchTransparency(); // refresh transparency after burn
+  } catch (e) {
+    log('cataBurn err', e?.message || e);
+    alert(`Burn failed: ${e.message || e}`);
   }
+}
+	  
+// Pause (admin only)
+async function cataPause() {
+  try {
+    if (!contracts.cata) {
+      await attachContractsIfSet();
+      if (!contracts.cata) return alert('Set CATA contract address first');
+    }
+
+    const tx = await contracts.cata.pause();
+    log('cata.pause tx', tx.hash);
+    await tx.wait();
+    log('cata.pause completed');
+  } catch (e) {
+    log('cataPause err', e?.message || e);
+    alert(`Pause failed: ${e.message || e}`);
+  }
+}
+
+// Unpause (admin only)
+async function cataUnpause() {
+  try {
+    if (!contracts.cata) {
+      await attachContractsIfSet();
+      if (!contracts.cata) return alert('Set CATA contract address first');
+    }
+
+    const tx = await contracts.cata.unpause();
+    log('cata.unpause tx', tx.hash);
+    await tx.wait();
+    log('cata.unpause completed');
+  } catch (e) {
+    log('cataUnpause err', e?.message || e);
+    alert(`Unpause failed: ${e.message || e}`);
+  }
+}
+
+// Swap Admin (council only)
+async function cataSwapAdmin() {
+  try {
+    if (!contracts.cata) {
+      await attachContractsIfSet();
+      if (!contracts.cata) return alert('Set CATA contract address first');
+    }
+
+    const newAdmin = $('swapNewAdmin').value.trim();
+    const oldAdmin = $('swapOldAdmin').value.trim() || ethers.constants.AddressZero;
+
+    if (!newAdmin) return alert('New admin address required');
+
+    const tx = await contracts.cata.swapAdmin(newAdmin, oldAdmin);
+    log('cata.swapAdmin tx', tx.hash);
+    await tx.wait();
+    log('cata.swapAdmin completed');
+  } catch (e) {
+    log('cataSwapAdmin err', e?.message || e);
+    alert(`Swap admin failed: ${e.message || e}`);
+  }
+}
+
+// Transparency (view supply)
+async function fetchTransparency() {
+  try {
+    if (!contracts.cata) {
+      await attachContractsIfSet();
+      if (!contracts.cata) return alert('Set CATA contract address first');
+    }
+
+    const totalSupply = await contracts.cata.totalSupply();
+    const maxSupply = await contracts.cata.MAX_SUPPLY();
+    const remainingMintable = maxSupply.sub(totalSupply);
+
+    $('cataTotalSupply').innerText = ethers.utils.formatUnits(totalSupply, 18) + " CATA";
+    $('cataMaxSupply').innerText = ethers.utils.formatUnits(maxSupply, 18) + " CATA";
+    $('cataRemainingMintable').innerText = ethers.utils.formatUnits(remainingMintable, 18) + " CATA";
+  } catch (e) {
+    log('fetchTransparency err', e?.message || e);
+    alert(`Transparency fetch failed: ${e.message || e}`);
+  }
+}
 
 /********************************************************************
  * Collection Registration logic
@@ -2275,9 +2432,6 @@ async function fetchFullRecoveryState() {
     alert("Error loading recovery info: " + (e.message || e));
   }
 }
-
-
-
 	  
   // ---------- Bind UI on load ----------
   window.addEventListener('load', async ()=>{
@@ -2287,7 +2441,7 @@ async function fetchFullRecoveryState() {
     // Connect / disconnect
     $('connectBtn').onclick = connect;
     $('disconnectBtn').onclick = disconnect;
-
+	  
     // Save/load addresses
     $('saveAddrs').onclick = ()=>{
       const payload = {
@@ -2303,9 +2457,11 @@ async function fetchFullRecoveryState() {
     $('loadAddrs').onclick = ()=>{ loadSavedAddrs(); if(signer) attachContractsIfSet(); };
 		
     // CATA
-    $('cataMintBtn').onclick = cataMint;
-    $('cataBurnBtn').onclick = cataBurn;
-    $('swapAdminBtn').onclick = cataSwapAdmin;
+	$('cataBurnBtn').onclick = cataBurn;
+  $('pauseBtn').onclick = cataPause;
+  $('unpauseBtn').onclick = cataUnpause;
+  $('swapAdminBtn').onclick = cataSwapAdmin;
+	$('refreshTransparencyBtn').onclick = fetchTransparency;
 
 	// Register Collection 
 /** Wire handlers to new UI elements — call this inside your window load / UI ready handler */
