@@ -440,6 +440,38 @@ contract BatchGuardianCouncilUpgradeable is
         return (tempVeto.guardian, tempVeto.expiry);
     }
 
+function getPendingDAOState()
+    external
+    view
+    returns (address pendingDAO, uint256 commitEarliest, uint256 commitDeadline)
+{
+    return (_pendingDAO, _daoCommitEarliest, _daoCommitDeadline);
+}
+
+function getPendingActiveBatchState()
+    external
+    view
+    returns (address[GUARDIAN_COUNT] memory pendingBatch, uint256 commitEarliest, uint256 commitDeadline)
+{
+    return (_pendingActiveBatch, _activeBatchCommitEarliest, _activeBatchCommitDeadline);
+}
+
+function getPendingStandbyBatchState()
+    external
+    view
+    returns (address[GUARDIAN_COUNT] memory pendingBatch, uint256 commitEarliest, uint256 commitDeadline)
+{
+    return (_pendingStandbyBatch, _standbyBatchCommitEarliest, _standbyBatchCommitDeadline);
+}
+
+function getRequestNonce(RecovKind kind) external view returns (uint256) {
+    return _requestNonce[kind];
+}
+
+function hasApproved(RecovKind kind, address guardian) external view returns (bool) {
+    return _lastApprovedNonce[kind][guardian] == _requestNonce[kind];
+}
+
     // -------- Internals --------
     function _resetReq(RecoveryRequest storage R, address proposed) internal {
         R.proposed = proposed;
