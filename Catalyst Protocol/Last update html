@@ -11,6 +11,41 @@
 	  .tabbtn {transition: all 0.2s ease-in-out;}
 .tabbtn:hover {opacity: 0.85; transform: translateY(-1px);}
 .tab-active {outline: 2px solid white; outline-offset: 2px;}
+
+  /* Center it on the screen */
+  #loadingIndicator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Spinner circle */
+  .spinner {
+    border: 6px solid rgba(255, 255, 255, 0.2);
+    border-top: 6px solid yellow;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+  }
+
+  /* Spinning animation */
+  @keyframes spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .loading-text {
+    margin-top: 10px;
+    color: yellow;
+    font-weight: bold;
+    font-size: 14px;
+  }
   </style>
 </head>
 <body class="min-h-screen text-white font-sans">
@@ -57,6 +92,7 @@
     </header>
 	
     <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+		
 
 <!-- Tab Buttons -->
 <div class="glass ring-1 rounded-2xl p-4 flex flex-wrap gap-3 justify-center">
@@ -103,6 +139,12 @@
 
   <!-- Tab Contents -->
   <div id="tabContents" class="glass rounded-2xl p-4">
+
+	   <!-- Loading Indicator -->
+<div id="loadingIndicator" style="display:none;">
+  <div class="spinner"></div>
+  <div class="loading-text">Loading...</div>
+</div> 
 
 <section>
   <div id="overview" class="tab-content">
@@ -328,6 +370,7 @@
       <h3 class="font-semibold mb-2">Collection Registration</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
         <input id="regCollectionAddr" placeholder="Collection address (ERC721)" class="p-2 rounded bg-black/20 text-sm" />
+		  <div id="regStatusInfo" class="text-xs text-slate-400 mt-1">Status: —</div>
         <input id="regDeclaredSupply" placeholder="Declared max supply (integer >=1)" class="p-2 rounded bg-black/20 text-sm" />
       </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -347,6 +390,7 @@
         <h4 class="font-semibold">Admin: Set / Upgrade Collection Tier</h4>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
           <input id="adminCollAddr" placeholder="Collection address (admin action)" class="p-2 rounded bg-black/20 text-sm" />
+			<div id="adminStatusInfo" class="text-xs text-slate-400 mt-1">Status: —</div>
           <input id="adminDeclaredSupply" placeholder="Declared supply (uint32)" class="p-2 rounded bg-black/20 text-sm" />
         </div>
         <div class="flex gap-2 mt-2">
@@ -371,6 +415,7 @@
       class="p-3 rounded-lg bg-slate-900/60 border border-slate-700/40 text-sm text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none" 
     />
   </div>
+			  <div id="manageStatusInfo" class="text-xs text-slate-400 mt-1">Status: —</div>
 
   <!-- Action Buttons -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
@@ -422,6 +467,7 @@
         placeholder="Bluechip Collection Address"
         class="p-2 rounded bg-black/20"
       />
+		<div id="bluechipStatusInfo" class="text-xs text-slate-400 mt-1">Status: —</div>
       <button id="harvestBluechipBtn" class="p-2 bg-sky-600 hover:bg-sky-500 rounded">
         🎁 Harvest Bluechip
       </button>
@@ -473,6 +519,7 @@
     <!-- Single NFT Stake -->
     <div class="grid grid-cols-2 gap-2">
       <input id="nftCollection" placeholder="NFT Collection Address" class="p-2 rounded bg-black/20" />
+		<div id="nftStatusInfo" class="text-xs text-slate-400 mt-1">Status: —</div>
       <input id="nftTokenId" placeholder="Token ID" class="p-2 rounded bg-black/20" />
     </div>
     <div class="flex gap-2">
@@ -592,16 +639,12 @@
       </optgroup>
     </select>
 
-	  <!-- single create button -->
-    <button id="createProposalBtn" class="w-full p-2 bg-violet-600 rounded">Create Proposal</button>
-  </div> <!-- end Proposal Creator card -->
-
-    <!-- Generic proposal fields (must be inside the card) -->
+    <!-- Generic fields -->
     <input id="proposalValue" placeholder="New numeric value" class="w-full p-2 rounded bg-black/20 text-sm" />
     <input id="proposalCollectionCtx" placeholder="Collection context (optional)" class="w-full p-2 rounded bg-black/20 text-sm" />
     <input id="paramTarget" placeholder="paramTarget (for VotingParam/TierUpgrade)" class="w-full p-2 rounded bg-black/20 text-sm" />
 
-    <!-- Tier Upgrade fields -->
+    <!-- Tier Upgrade -->
     <div id="tierUpgradeRow" class="grid grid-cols-1 md:grid-cols-3 gap-2 hidden">
       <select id="tierTo" class="p-2 rounded bg-black/20 text-sm">
         <option value="0">UNVERIFIED (0)</option>
@@ -612,7 +655,7 @@
       <input id="tierDeclaredSupply" placeholder="Declared supply (uint32)" class="p-2 rounded bg-black/20 text-sm" />
     </div>
 
-    <!-- Council batch reseed fields -->
+    <!-- Council batch -->
     <div id="councilBatchRow" class="hidden space-y-2">
       <p class="text-xs text-slate-400">Enter 7 guardian addresses for new batch:</p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -624,11 +667,11 @@
         <input class="councilAddr p-2 rounded bg-black/20 text-sm" placeholder="Guardian 6" />
         <input class="councilAddr p-2 rounded bg-black/20 text-sm" placeholder="Guardian 7" />
       </div>
-    </div> <!-- <-- important: close councilBatchRow here -->
+    </div>
 
-    <!-- Propose new DAO -->
+    <!-- New DAO -->
     <div id="newDaoRow" class="hidden">
-      <input id="newDaoAddr" placeholder="New DAO address" class="w-full p-2 rounded bg-black/20 text-sm" />
+      <input id="govNewDaoAddr" placeholder="New DAO contract address" class="w-full p-2 rounded bg-black/20 text-sm" />
     </div>
 
     <!-- Upgrade council -->
@@ -636,10 +679,12 @@
       <input id="newCouncilImpl" placeholder="New council implementation address" class="w-full p-2 rounded bg-black/20 text-sm" />
     </div>
 
-  <!-- Voting / Execution -->
+    <button id="createProposalBtn" class="w-full p-2 bg-violet-600 rounded">Create Proposal</button>
+  </div>
+
+  <!-- Voting & Execution -->
   <div class="glass p-4 rounded-lg space-y-3 mt-4">
     <h3 class="font-semibold">Vote & Execute</h3>
-
     <input id="proposalId" placeholder="Proposal ID (hex)" class="w-full p-2 rounded bg-black/20 text-sm" />
     <div class="flex gap-2">
       <button id="voteProposalBtn" class="flex-1 p-2 bg-blue-600 rounded">Vote</button>
@@ -677,10 +722,10 @@
     Manage guardian batches, DAO rotation, and emergency recovery.
   </p>
 
-  <!-- DAO -->
+  <!-- DAO Rotation -->
   <div class="space-y-2 text-sm">
     <div class="grid grid-cols-2 gap-2">
-      <input id="newDaoAddr" placeholder="New DAO address" class="p-2 rounded bg-black/20" />
+      <input id="councilNewDaoAddr" placeholder="New DAO address" class="p-2 rounded bg-black/20" />
       <button id="proposeDaoBtn" class="p-2 bg-indigo-600 rounded">Propose DAO</button>
     </div>
     <button id="commitDaoBtn" class="w-full p-2 bg-indigo-400 rounded">Commit DAO</button>
@@ -688,7 +733,7 @@
 
   <hr class="border-slate-700 my-2" />
 
-  <!-- Active Batch -->
+  <!-- Guardian Batches -->
   <div class="space-y-2 text-sm">
     <textarea id="activeBatchInput" placeholder="7 addresses, one per line"
       class="w-full p-2 rounded bg-black/20 h-28 font-mono"></textarea>
@@ -698,7 +743,6 @@
     </div>
   </div>
 
-  <!-- Standby Batch -->
   <div class="space-y-2 text-sm mt-3">
     <textarea id="standbyBatchInput" placeholder="7 addresses, one per line"
       class="w-full p-2 rounded bg-black/20 h-28 font-mono"></textarea>
@@ -711,145 +755,87 @@
 
   <hr class="border-slate-700 my-2" />
 
-  <!-- Lock & Warning -->
+  <!-- Lock -->
   <div class="space-y-2 text-sm">
     <button id="clearLockBtn" class="w-full p-2 bg-slate-600 rounded">Clear Lock/Warning</button>
   </div>
 
   <hr class="border-slate-700 my-2" />
 
-<!-- Recovery -->
-<h3 class="text-sm font-semibold mb-1">Recovery Request</h3>
-<div class="space-y-2 text-sm">
-  <!-- Kind -->
-  <select id="recoveryKind" class="w-full p-2 rounded bg-black/20">
-    <option value="0">Deployer</option>
-    <option value="1">Admin</option>
-  </select>
-
-  <!-- Inputs -->
-  <input id="recoveryProposed" placeholder="Proposed address" class="w-full p-2 rounded bg-black/20" />
-  <input id="recoveryCallTarget" placeholder="Target contract address" class="w-full p-2 rounded bg-black/20" />
-
-  <!-- ABI encoding helper -->
-  <input id="recoveryFunction" placeholder="Function (e.g. upgradeTo(address))" class="w-full p-2 rounded bg-black/20" />
-  <input id="recoveryArgs" placeholder="Arguments (comma-separated)" class="w-full p-2 rounded bg-black/20" />
-
-  <!-- Auto-generated -->
-  <textarea id="recoveryCallData" placeholder="Calldata (auto-generated 0x...)" class="w-full p-2 rounded bg-black/20 font-mono h-20"></textarea>
-  <button id="encodeCallDataBtn" class="w-full p-2 bg-blue-600 rounded">Encode CallData</button>
-
-  <!-- Buttons -->
-  <div class="flex gap-2 mt-2">
-    <button id="proposeRecoveryBtn" class="flex-1 p-2 bg-red-600 rounded">Propose Recovery</button>
-    <button id="approveRecoveryBtn" class="flex-1 p-2 bg-orange-600 rounded">Approve</button>
-    <button id="executeRecoveryBtn" class="flex-1 p-2 bg-green-600 rounded">Execute</button>
-    <button id="vetoRecoveryBtn" class="flex-1 p-2 bg-slate-600 rounded">Veto</button>
+  <!-- Recovery -->
+  <h3 class="text-sm font-semibold mb-1">Recovery Request</h3>
+  <div class="space-y-2 text-sm">
+    <select id="recoveryKind" class="w-full p-2 rounded bg-black/20">
+      <option value="0">Deployer</option>
+      <option value="1">Admin</option>
+    </select>
+    <input id="recoveryProposed" placeholder="Proposed address" class="w-full p-2 rounded bg-black/20" />
+    <input id="recoveryCallTarget" placeholder="Target contract address" class="w-full p-2 rounded bg-black/20" />
+    <input id="recoveryFunction" placeholder="Function (e.g. upgradeTo(address))" class="w-full p-2 rounded bg-black/20" />
+    <input id="recoveryArgs" placeholder="Arguments (comma-separated)" class="w-full p-2 rounded bg-black/20" />
+    <textarea id="recoveryCallData" placeholder="Calldata (auto-generated 0x...)" class="w-full p-2 rounded bg-black/20 font-mono h-20"></textarea>
+    <button id="encodeCallDataBtn" class="w-full p-2 bg-blue-600 rounded">Encode CallData</button>
+    <div class="flex gap-2 mt-2">
+      <button id="proposeRecoveryBtn" class="flex-1 p-2 bg-red-600 rounded">Propose</button>
+      <button id="approveRecoveryBtn" class="flex-1 p-2 bg-orange-600 rounded">Approve</button>
+      <button id="executeRecoveryBtn" class="flex-1 p-2 bg-green-600 rounded">Execute</button>
+      <button id="vetoRecoveryBtn" class="flex-1 p-2 bg-slate-600 rounded">Veto</button>
+    </div>
   </div>
 
-	<hr class="border-slate-700 my-3" />
+  <hr class="border-slate-700 my-2" />
 
-<!-- DAO Info -->
-<h3 class="text-base font-semibold mb-2 text-slate-200 flex items-center gap-2">
-  🏛️ DAO
-</h3>
-<div class="p-3 rounded-lg bg-slate-800/60 shadow text-sm">
-  <div class="text-slate-400 text-xs">DAO Address</div>
-  <div id="daoAddr" class="font-mono text-slate-100 break-all">—</div>
-</div>
-<button id="refreshDaoBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition">
-  🔄 Refresh DAO
-</button>
+  <!-- Read-only DAO + Guardians -->
+  <h3 class="text-base font-semibold mb-2">DAO State</h3>
+  <div class="p-3 rounded-lg bg-slate-800/60 shadow text-sm space-y-3">
+    <div>
+      <div class="text-slate-400 text-xs">Current DAO</div>
+      <div id="daoAddr" class="font-mono text-slate-100 break-all">—</div>
+    </div>
+    <div>
+      <div class="text-slate-400 text-xs">Pending DAO</div>
+      <div id="pendingDaoAddr" class="font-mono text-slate-100 break-all">—</div>
+    </div>
+    <div>
+      <div class="text-slate-400 text-xs">Commit Window</div>
+      <div id="pendingDaoWindow" class="font-mono text-slate-100">—</div>
+    </div>
+  </div>
+  <button id="refreshDaoBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm">🔄 Refresh DAO</button>
 
-<!-- Guardians -->
-<h3 class="text-base font-semibold mt-6 mb-2 text-slate-200 flex items-center gap-2">
-  🛡️ Guardians
-</h3>
-<div class="grid grid-cols-2 gap-3 text-sm">
-  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
-    <div class="text-slate-400 text-xs">Active</div>
-    <pre id="activeGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
+  <h3 class="text-base font-semibold mt-6 mb-2">Guardians</h3>
+  <div class="grid grid-cols-2 gap-3 text-sm">
+    <div class="p-3 rounded-lg bg-slate-800/60 shadow">
+      <div class="text-slate-400 text-xs">Active</div>
+      <pre id="activeGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
+    </div>
+    <div class="p-3 rounded-lg bg-slate-800/60 shadow">
+      <div class="text-slate-400 text-xs">Standby</div>
+      <pre id="standbyGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
+    </div>
+    <div class="col-span-2 p-3 rounded-lg bg-slate-800/60 shadow">
+      <div class="text-slate-400 text-xs">Pending Active Batch</div>
+      <pre id="pendingActiveGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
+      <div class="text-slate-400 text-xs mt-2">Commitment Window</div>
+      <div id="pendingActiveWindow" class="font-mono text-slate-100">—</div>
+    </div>
+    <div class="col-span-2 p-3 rounded-lg bg-slate-800/60 shadow">
+      <div class="text-slate-400 text-xs">Pending Standby Batch</div>
+      <pre id="pendingStandbyGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
+      <div class="text-slate-400 text-xs mt-2">Commitment Window</div>
+      <div id="pendingStandbyWindow" class="font-mono text-slate-100">—</div>
+    </div>
   </div>
-  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
-    <div class="text-slate-400 text-xs">Standby</div>
-    <pre id="standbyGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
-  </div>
-</div>
-<button id="refreshGuardiansBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition">
-  🔄 Refresh Guardians
-</button>
+  <button id="refreshGuardiansBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm">🔄 Refresh Guardians</button>
 
-<!-- Lock Status -->
-<h3 class="text-base font-semibold mt-6 mb-2 text-slate-200 flex items-center gap-2">
-  🔒 Lock Status
-</h3>
-<div class="p-3 rounded-lg bg-slate-800/60 shadow text-sm">
-  <div class="text-slate-400 text-xs">Status</div>
-  <div id="lockStatus" class="font-mono text-slate-100">—</div>
-</div>
-<button id="refreshLockBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition">
-  🔄 Refresh Lock
-</button>
-
-<!-- Recovery State -->
-<h3 class="text-base font-semibold mt-6 mb-2 text-slate-200 flex items-center gap-2">
-  🩹 Recovery State
-</h3>
-<div class="flex items-center gap-2 mb-3">
-  <select id="recoveryKind" class="rounded-lg px-2 py-1 text-sm text-black">
-  <option value="">Select Recovery Kind</option>
-  <option value="0">🟢 Default (0)</option>
-  <option value="1">🛡️ Social (1)</option>
-  <option value="2">👥 Guardian (2)</option>
-  </select>
-  <button id="refreshRecoveryBtn" class="flex-1 p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition">
-    🔄 Refresh Recovery
-  </button>
-</div>
-<div class="grid grid-cols-2 gap-3 text-sm">
-  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
-    <div class="text-slate-400 text-xs">Proposed</div>
-    <pre id="riProposed" class="font-mono text-slate-100 whitespace-pre-wrap">—</pre>
+  <h3 class="text-base font-semibold mt-6 mb-2">Lock Status</h3>
+  <div class="p-3 rounded-lg bg-slate-800/60 shadow text-sm">
+    <div class="text-slate-400 text-xs">Status</div>
+    <div id="lockStatus" class="font-mono text-slate-100">—</div>
   </div>
-  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
-    <div class="text-slate-400 text-xs">Approvals</div>
-    <pre id="riApprovals" class="font-mono text-slate-100">—</pre>
-  </div>
-  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
-    <div class="text-slate-400 text-xs">Deadline</div>
-    <pre id="riDeadline" class="font-mono text-slate-100">—</pre>
-  </div>
-  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
-    <div class="text-slate-400 text-xs">Executed</div>
-    <pre id="riExecuted" class="font-mono text-slate-100">—</pre>
-  </div>
-  <div class="col-span-2 p-3 rounded-lg bg-slate-800/60 shadow">
-    <div class="text-slate-400 text-xs">Call Target</div>
-    <pre id="riCallTarget" class="font-mono text-slate-100 whitespace-pre-wrap">—</pre>
-  </div>
-  <div class="col-span-2 p-3 rounded-lg bg-slate-800/60 shadow">
-    <div class="text-slate-400 text-xs">Call Data</div>
-    <pre id="riCallData" class="font-mono text-slate-100 whitespace-pre-wrap break-words">—</pre>
-  </div>
-  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
-    <div class="text-slate-400 text-xs">Guardian</div>
-    <pre id="riGuardian" class="font-mono text-slate-100">—</pre>
-  </div>
-  <div class="p-3 rounded-lg bg-slate-800/60 shadow">
-    <div class="text-slate-400 text-xs">Veto Expiry</div>
-    <pre id="riVetoExpiry" class="font-mono text-slate-100">—</pre>
-  </div>
-  <div class="col-span-2 p-3 rounded-lg bg-slate-800/60 shadow">
-    <div class="text-slate-400 text-xs">Nonce</div>
-    <pre id="riNonce" class="font-mono text-slate-100">—</pre>
-  </div>
-  <div class="col-span-2 p-3 rounded-lg bg-slate-800/60 shadow">
-    <div class="text-slate-400 text-xs">Approvers</div>
-    <pre id="riApprovers" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
-  </div>
-</div>
-</div>
+  <button id="refreshLockBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm">🔄 Refresh Lock</button>
 </section>
+         
 
 	  <div id="whitepaper" class="tab-content hidden">
   <div class="glass ring-1 rounded-2xl p-5 space-y-6">
@@ -957,7 +943,7 @@
     cata: "0x605bb62249E1b16049Ca6E69e70BCFEcD88c3E3D",
     staking: "0xa8Dd5EeEcF6eCc4Ff8A06881125ae95C0f777332",
     governance: "0x11D93F284754af1C543F61D7b04784fC974494A4",
-    council: "0xDE61892d944Bb9A795e083389c41030EaaEd35ff"
+    council: "0x5C1006247f7759C3f245312f2407AcE3351Db32A"
   };
 
 	  // App state
@@ -1075,6 +1061,7 @@ $('cataBal').innerText = ethers.utils.formatEther(bal) + ' CATA';
   return addr.slice(0, 6) + "..." + addr.slice(-4);
 }
 
+
 // ---------- Connect / Disconnect ----------
 async function connect() {
   try {
@@ -1134,8 +1121,7 @@ function disconnect() {
 
 
 // ---------- CATA functions ----------
-// Burn (any holder) — accepts real numbers (e.g., "1.5" = 1.5 CATA)
-// Burn (any holder) - user enters normal number (e.g. "1.5"), auto converts to wei
+// Burn (any holder)
 async function cataBurn() {
   try {
     if (!contracts.cata) {
@@ -1146,22 +1132,24 @@ async function cataBurn() {
     const amtRaw = $('cataBurnAmt').value.trim();
     if (!amtRaw) return alert('Burn amount required');
 
-    // ✅ convert normal number to wei
     const amtWei = ethers.utils.parseEther(amtRaw);
 
+    showLoading("Burning tokens...");
     const tx = await contracts.cata.burn(amtWei);
     log('cata.burn tx', tx.hash);
     await tx.wait();
     log('cata.burn completed');
 
     await fetchCataBalance();
-    await fetchTransparency(); // refresh transparency after burn
+    await fetchTransparency();
   } catch (e) {
     log('cataBurn err', e?.message || e);
     alert(`Burn failed: ${e.message || e}`);
+  } finally {
+    hideLoading();
   }
 }
-	  
+
 // Pause (admin only)
 async function cataPause() {
   try {
@@ -1170,6 +1158,7 @@ async function cataPause() {
       if (!contracts.cata) return alert('Set CATA contract address first');
     }
 
+    showLoading("Pausing contract...");
     const tx = await contracts.cata.pause();
     log('cata.pause tx', tx.hash);
     await tx.wait();
@@ -1177,6 +1166,8 @@ async function cataPause() {
   } catch (e) {
     log('cataPause err', e?.message || e);
     alert(`Pause failed: ${e.message || e}`);
+  } finally {
+    hideLoading();
   }
 }
 
@@ -1188,6 +1179,7 @@ async function cataUnpause() {
       if (!contracts.cata) return alert('Set CATA contract address first');
     }
 
+    showLoading("Unpausing contract...");
     const tx = await contracts.cata.unpause();
     log('cata.unpause tx', tx.hash);
     await tx.wait();
@@ -1195,6 +1187,8 @@ async function cataUnpause() {
   } catch (e) {
     log('cataUnpause err', e?.message || e);
     alert(`Unpause failed: ${e.message || e}`);
+  } finally {
+    hideLoading();
   }
 }
 
@@ -1211,6 +1205,7 @@ async function cataSwapAdmin() {
 
     if (!newAdmin) return alert('New admin address required');
 
+    showLoading("Swapping admin...");
     const tx = await contracts.cata.swapAdmin(newAdmin, oldAdmin);
     log('cata.swapAdmin tx', tx.hash);
     await tx.wait();
@@ -1218,6 +1213,8 @@ async function cataSwapAdmin() {
   } catch (e) {
     log('cataSwapAdmin err', e?.message || e);
     alert(`Swap admin failed: ${e.message || e}`);
+  } finally {
+    hideLoading();
   }
 }
 
@@ -1229,6 +1226,7 @@ async function fetchTransparency() {
       if (!contracts.cata) return alert('Set CATA contract address first');
     }
 
+    showLoading("Fetching transparency...");
     const totalSupply = await contracts.cata.totalSupply();
     const maxSupply = await contracts.cata.MAX_SUPPLY();
     const remainingMintable = maxSupply.sub(totalSupply);
@@ -1239,19 +1237,29 @@ async function fetchTransparency() {
   } catch (e) {
     log('fetchTransparency err', e?.message || e);
     alert(`Transparency fetch failed: ${e.message || e}`);
+  } finally {
+    hideLoading();
   }
+}
+
+/********************************************************************
+ * Loading Indicator
+ ********************************************************************/
+function showLoading() {
+  $('loadingIndicator').style.display = 'block';
+}
+function hideLoading() {
+  $('loadingIndicator').style.display = 'none';
 }
 
 /********************************************************************
  * Collection Registration logic
  ********************************************************************/
-// ---------- Minimal ERC20 ABI fallback (allowance/approve) ----------
 const MIN_ERC20_ABI = [
   'function allowance(address owner, address spender) view returns (uint256)',
   'function approve(address spender, uint256 amount) returns (bool)'
 ];
 
-// BigNumber helpers & fee constants (match contract constants)
 const ONE = ethers.BigNumber.from("1000000000000000000");
 const SMALL_MIN_FEE = ONE.mul(1);
 const SMALL_MAX_FEE = ONE.mul(10);
@@ -1261,7 +1269,6 @@ const LARGE_MIN_FEE = ONE.mul(51);
 const LARGE_MAX_FEE_CAP = ONE.mul(200);
 const BP_DENOM = 10000;
 
-/** calculate baseFee using same curve logic as the contract (BigNumber safe) */
 function calculateRegistrationBaseFeeBN(declaredSupplyInt) {
   if (!Number.isInteger(declaredSupplyInt) || declaredSupplyInt < 1) {
     throw new Error('declaredSupply must be integer >= 1');
@@ -1282,17 +1289,14 @@ function calculateRegistrationBaseFeeBN(declaredSupplyInt) {
   }
 }
 
-/** compute total fee (baseFeeBN) for tier (uint8). reads unverified surcharge BP from contract if needed */
 async function computeTotalFeeBN(baseFeeBN, tier) {
-  let multBP = BP_DENOM; // default (no surcharge)
+  let multBP = BP_DENOM;
   try {
     if (tier === 0) {
-      // try reading from contract (public variable)
       if (contracts.staking && typeof contracts.staking.unverifiedSurchargeBP === 'function') {
         const bp = await contracts.staking.unverifiedSurchargeBP();
-        multBP = bp.toNumber(); // fall back if fails
+        multBP = bp.toNumber();
       } else {
-        // fallback default used in your code
         multBP = 12000;
       }
     }
@@ -1305,20 +1309,17 @@ async function computeTotalFeeBN(baseFeeBN, tier) {
   return { totalFeeBN: total, surchargeBN: surcharge, multBP };
 }
 
-/** Format BigNumber wei to readable Ether string */
 function fmtCata(bn) { return ethers.utils.formatEther(bn) + ' CATA'; }
 
-/** Ensure we have an ERC20 contract instance for CATA (ABI might be in abis.cata or fallback) */
 function getCataERC20ContractInstance() {
   const cataAddr = $('addrCata').value.trim();
   if (!cataAddr) throw new Error('CATA address not set in UI');
   if (contracts.cata && typeof contracts.cata.allowance === 'function') return contracts.cata;
-  // fallback to minimal ABI
   return new ethers.Contract(cataAddr, MIN_ERC20_ABI, signer);
 }
 
-/** Calculate fee and update UI */
 async function handleCalcRegFee() {
+  showLoading();
   try {
     const supplyStr = $('regDeclaredSupply').value.trim();
     const collection = $('regCollectionAddr').value.trim();
@@ -1332,16 +1333,17 @@ async function handleCalcRegFee() {
   } catch (e) {
     log('handleCalcRegFee err', e && e.message ? e.message : e);
     alert('Fee calc error: ' + (e.message || e));
+  } finally {
+    hideLoading();
   }
 }
 
-/** Approve CATA to staking contract for registration (amount param optional — will use computed fee if available) */
 async function handleApproveForRegistration() {
+  showLoading();
   try {
     if (!provider || !signer) return alert('connect wallet first');
     const stakingAddr = $('addrStaking').value.trim();
     if (!stakingAddr) return alert('set staking address first');
-    // compute fee
     const supplyStr = $('regDeclaredSupply').value.trim();
     const declaredSupply = parseInt(supplyStr, 10);
     if (!supplyStr || isNaN(declaredSupply)) return alert('enter declared supply to compute fee before approving');
@@ -1356,11 +1358,13 @@ async function handleApproveForRegistration() {
   } catch (e) {
     log('handleApproveForRegistration err', e && e.message ? e.message : e);
     alert('Approve failed: ' + (e.message || e));
+  } finally {
+    hideLoading();
   }
 }
 
-/** Permissionless registration: approve if needed, then call registerCollection(collection, declaredSupply, tier) */
 async function handleRegisterCollection() {
+  showLoading();
   try {
     if (!provider || !signer) return alert('connect wallet first');
     const collection = $('regCollectionAddr').value.trim();
@@ -1368,17 +1372,12 @@ async function handleRegisterCollection() {
     if (!collection || !supplyStr) return alert('collection & declared supply required');
     const declaredSupply = parseInt(supplyStr, 10);
     const tier = parseInt($('regTier').value, 10);
-
-    // compute fee
     const baseFeeBN = calculateRegistrationBaseFeeBN(declaredSupply);
     const { totalFeeBN } = await computeTotalFeeBN(baseFeeBN, tier);
-
-    // ensure allowance
     const cata = getCataERC20ContractInstance();
     const myAddr = await signer.getAddress();
     const stakingAddr = $('addrStaking').value.trim();
     if (!stakingAddr) return alert('Set staking contract address first');
-
     const allowance = await cata.allowance(myAddr, stakingAddr);
     if (allowance.lt(totalFeeBN)) {
       const ok = confirm('You need to approve CATA for the registration fee: ' + fmtCata(totalFeeBN) + '. Approve now?');
@@ -1388,16 +1387,12 @@ async function handleRegisterCollection() {
       await txA.wait();
       log('approve done');
     }
-
-    // call registerCollection(collection, declaredSupply, tier)
     if (!contracts.staking || typeof contracts.staking.registerCollection !== 'function') {
-      // try attaching if ABI missing
       await attachContractsIfSet();
       if (!contracts.staking || typeof contracts.staking.registerCollection !== 'function') {
         return alert('staking contract ABI missing registerCollection function or contract not attached');
       }
     }
-
     const tx = await contracts.staking.registerCollection(collection, declaredSupply, tier);
     log('registerCollection tx', tx.hash);
     await tx.wait();
@@ -1405,11 +1400,13 @@ async function handleRegisterCollection() {
   } catch (e) {
     log('handleRegisterCollection err', e && e.message ? e.message : e);
     alert('Register failed: ' + (e.message || e));
+  } finally {
+    hideLoading();
   }
 }
 
-/** Admin: setCollectionConfig(collection, declaredMaxSupply, tier) — will revert if caller not admin */
 async function handleAdminSetCollectionConfig() {
+  showLoading();
   try {
     if (!provider || !signer) return alert('connect wallet first');
     if (!contracts.staking || typeof contracts.staking.setCollectionConfig !== 'function') {
@@ -1429,15 +1426,13 @@ async function handleAdminSetCollectionConfig() {
   } catch (e) {
     log('handleAdminSetCollectionConfig err', e && e.message ? e.message : e);
     alert('Admin set failed: ' + (e.message || e));
+  } finally {
+    hideLoading();
   }
 }
 
-	  /********************************************************************
- * Extra Collection Management (Admin)
- ********************************************************************/
-
-/** Admin: removeCollection(collection) */
 async function handleRemoveCollection() {
+  showLoading();
   try {
     if (!provider || !signer) return alert('connect wallet first');
     if (!contracts.staking || typeof contracts.staking.removeCollection !== 'function') {
@@ -1455,11 +1450,13 @@ async function handleRemoveCollection() {
   } catch (e) {
     log('handleRemoveCollection err', e && e.message ? e.message : e);
     alert('Remove failed: ' + (e.message || e));
+  } finally {
+    hideLoading();
   }
 }
 
-/** Admin: forfeitEscrowIfExpired(collection) */
 async function handleForfeitEscrow() {
+  showLoading();
   try {
     if (!provider || !signer) return alert('connect wallet first');
     if (!contracts.staking || typeof contracts.staking.forfeitEscrowIfExpired !== 'function') {
@@ -1477,11 +1474,13 @@ async function handleForfeitEscrow() {
   } catch (e) {
     log('handleForfeitEscrow err', e && e.message ? e.message : e);
     alert('Forfeit failed: ' + (e.message || e));
+  } finally {
+    hideLoading();
   }
 }
 
-/** Admin: setBluechipCollection(collection, bool) */
 async function handleToggleBluechip() {
+  showLoading();
   try {
     if (!provider || !signer) return alert('connect wallet first');
     if (!contracts.staking || typeof contracts.staking.setBluechipCollection !== 'function') {
@@ -1492,14 +1491,11 @@ async function handleToggleBluechip() {
     }
     const collection = $('manageCollAddr').value.trim();
     if (!collection) return alert('collection required');
-
-    // Check current status if function available
     let newStatus = true;
     if (typeof contracts.staking.isBluechipCollection === 'function') {
       const current = await contracts.staking.isBluechipCollection(collection);
       newStatus = !current;
     }
-
     const tx = await contracts.staking.setBluechipCollection(collection, newStatus);
     log('setBluechipCollection tx', tx.hash);
     await tx.wait();
@@ -1507,57 +1503,111 @@ async function handleToggleBluechip() {
   } catch (e) {
     log('handleToggleBluechip err', e && e.message ? e.message : e);
     alert('Bluechip toggle failed: ' + (e.message || e));
+  } finally {
+    hideLoading();
   }
 }
+
+
+	  async function fetchCollectionStatus(addr) {
+  if (!addr || addr.length !== 42) return "—"; // basic ETH address check
+
+  try {
+    const status = await contract.methods.getCollectionStatus(addr).call();
+    switch (parseInt(status)) {
+      case 0: return "❌ Not Registered";
+      case 1: return "⚪ Unverified";
+      case 2: return "✅ Verified";
+      case 3: return "💎 Bluechip";
+      default: return "—";
+    }
+  } catch (err) {
+    console.error("Status check error:", err);
+    return "⚠️ Error fetching status";
+  }
+}
+
+	  function attachStatusChecker(inputId, statusDivId) {
+  const inputEl = document.getElementById(inputId);
+  const statusEl = document.getElementById(statusDivId);
+
+  inputEl.addEventListener("input", async () => {
+    const addr = inputEl.value.trim();
+    statusEl.innerText = "⏳ Checking...";
+    const result = await fetchCollectionStatus(addr);
+    statusEl.innerText = `Status: ${result}`;
+  });
+}
+
+// Attach to each field
+attachStatusChecker("regCollectionAddr", "regStatusInfo");
+attachStatusChecker("adminCollAddr", "adminStatusInfo");
+attachStatusChecker("manageCollAddr", "manageStatusInfo");
+// Attach status checkers to new fields
+attachStatusChecker("bluechipCollectionInput", "bluechipStatusInfo");
+attachStatusChecker("nftCollection", "nftStatusInfo");	  
 	  
 
 // ---------- Bluechip Actions ----------
 // Enroll as Bluechip
 async function enrollBluechip(){
-    try {
-      if(!contracts.staking){ 
-        await attachContractsIfSet(); 
-        if(!contracts.staking) return alert('Set staking contract'); 
-      }
-      if(typeof contracts.staking.enrollBluechip === 'function'){
-        const tx = await contracts.staking.enrollBluechip();
-        log('enrollBluechip tx', tx.hash);
-        await tx.wait();
-        log('enrollBluechip done');
-      } else {
-        alert('enrollBluechip not found in ABI');
-      }
-    } catch(e){ log('enrollBluechip err', e && e.message ? e.message : e); }
-  }
-
-// Harvest Bluechip
-async function harvestBluechip(){
-    try {
-      const collection = document.getElementById('bluechipCollectionInput').value.trim();
-      if(!collection) return alert('Enter a collection address');
-      if(!contracts.staking){ 
-        await attachContractsIfSet(); 
-        if(!contracts.staking) return alert('Set staking contract'); 
-      }
-      if(typeof contracts.staking.harvestBluechip === 'function'){
-        const tx = await contracts.staking.harvestBluechip(collection);
-        log('harvestBluechip tx', tx.hash);
-        await tx.wait();
-        log('harvestBluechip done');
-      } else {
-        alert('harvestBluechip not found in ABI');
-      }
-    } catch(e){ log('harvestBluechip err', e && e.message ? e.message : e); }
-  } 
-
-// Refresh Bluechip Info
-async function refreshBluechip(){
   try {
     if(!contracts.staking){ 
       await attachContractsIfSet(); 
       if(!contracts.staking) return alert('Set staking contract'); 
     }
+    if(typeof contracts.staking.enrollBluechip === 'function'){
+      showLoading("Enrolling as Bluechip...");
+      const tx = await contracts.staking.enrollBluechip();
+      log('enrollBluechip tx', tx.hash);
+      await tx.wait();
+      log('enrollBluechip done');
+    } else {
+      alert('enrollBluechip not found in ABI');
+    }
+  } catch(e){ 
+    log('enrollBluechip err', e?.message || e); 
+    alert(`Enroll failed: ${e.message || e}`);
+  } finally {
+    hideLoading();
+  }
+}
+
+// Harvest Bluechip
+async function harvestBluechip(){
+  try {
+    const collection = document.getElementById('bluechipCollectionInput').value.trim();
+    if(!collection) return alert('Enter a collection address');
+    if(!contracts.staking){ 
+      await attachContractsIfSet(); 
+      if(!contracts.staking) return alert('Set staking contract'); 
+    }
+    if(typeof contracts.staking.harvestBluechip === 'function'){
+      showLoading("Harvesting Bluechip rewards...");
+      const tx = await contracts.staking.harvestBluechip(collection);
+      log('harvestBluechip tx', tx.hash);
+      await tx.wait();
+      log('harvestBluechip done');
+    } else {
+      alert('harvestBluechip not found in ABI');
+    }
+  } catch(e){ 
+    log('harvestBluechip err', e?.message || e); 
+    alert(`Harvest failed: ${e.message || e}`);
+  } finally {
+    hideLoading();
+  }
+}
+
+// Refresh Bluechip Info
+async function refreshBluechip(){
+  try {
+    if(!contracts.staking){
+      await attachContractsIfSet();
+      if(!contracts.staking) return alert('Set staking contract');
+    }
     if(typeof contracts.staking.bluechipWallets === 'function'){
+      showLoading("Refreshing Bluechip info...");
       const me = await signer.getAddress();
 
       const enrolled = await contracts.staking.bluechipWallets(
@@ -1570,313 +1620,275 @@ async function refreshBluechip(){
         ethers.constants.AddressZero,
         me
       );
-      $('bluechipLastBlock').innerText =
-        lastBlock.toString() !== '0' ? lastBlock.toString() : '—';
+      if(lastBlock.toString() !== '0'){
+        const currentBlock = await provider.getBlockNumber();
+        const diff = currentBlock - lastBlock.toNumber();
+        const approxDays = (diff * 12) / (60 * 60 * 24); // ⏱ 12s per block → days
+        $('bluechipLastBlock').innerText =
+          `${lastBlock.toString()} (≈ ${approxDays.toFixed(2)} days ago)`;
+      } else {
+        $('bluechipLastBlock').innerText = '—';
+      }
 
       const fee = await contracts.staking.bluechipWalletFee();
-      $('bluechipFee').innerText = `${fee.toString()} CATA`;
+      const readableFee = ethers.utils.formatUnits(fee, 18); // assumes 18 decimals
+      $('bluechipFee').innerText = `${readableFee} CATA`;
 
       log('refreshBluechip done');
     } else {
       alert('bluechipWallets not found in ABI');
     }
-  } catch(e){ log('refreshBluechip err', e && e.message ? e.message : e); }
+  } catch(e){ 
+    log('refreshBluechip err', e?.message || e); 
+    alert(`Refresh failed: ${e.message || e}`);
+  } finally {
+    hideLoading();
+  }
 }
-
 	  
-  // ---------- NFT approval ----------
-  async function approveNFT(){
-    try {
-      const collection = $('nftCollection').value.trim();
-      if(!collection) return alert('collection required');
-      const stakingAddr = $('addrStaking').value.trim();
-      if(!stakingAddr) return alert('staking address required');
-      const nft = new ethers.Contract(collection, ERC721_ABI, signer);
-      const me = await signer.getAddress();
-      const already = await nft.isApprovedForAll(me, stakingAddr);
-      if(already){ log('already approved'); return; }
-      const tx = await nft.setApprovalForAll(stakingAddr, true);
-      log('approve tx', tx.hash);
-      await tx.wait();
-      log('approve complete');
-    } catch(e){ log('approveNFT err', e && e.message ? e.message : e); }
-  }
-
-  // ---------- Staking single ----------
-  async function termStake(){
-    try {
-      if(!contracts.staking) { await attachContractsIfSet(); if(!contracts.staking) return alert('Set staking contract'); }
-      const collection = $('nftCollection').value.trim();
-      const tokenId = $('nftTokenId').value.trim();
-      if(!collection || !tokenId) return alert('collection & tokenId required');
-      const tx = await contracts.staking.termStake(collection, tokenId);
-      log('termStake tx', tx.hash);
-      await tx.wait();
-      log('termStake done');
-    } catch(e){ log('termStake err', e && e.message ? e.message : e); }
-  }
-
-  async function permanentStake(){
-    try {
-      if(!contracts.staking) { await attachContractsIfSet(); if(!contracts.staking) return alert('Set staking contract'); }
-      const collection = $('nftCollection').value.trim();
-      const tokenId = $('nftTokenId').value.trim();
-      if(!collection || !tokenId) return alert('collection & tokenId required');
-      const tx = await contracts.staking.permanentStake(collection, tokenId);
-      log('permanentStake tx', tx.hash);
-      await tx.wait();
-      log('permanentStake done');
-    } catch(e){ log('permanentStake err', e && e.message ? e.message : e); }
-  }
-
-  async function unstake(){
-    try {
-      if(!contracts.staking) { await attachContractsIfSet(); if(!contracts.staking) return alert('Set staking contract'); }
-      const collection = $('nftCollection').value.trim();
-      const tokenId = $('nftTokenId').value.trim();
-      if(!collection || !tokenId) return alert('collection & tokenId required');
-      const tx = await contracts.staking.unstake(collection, tokenId);
-      log('unstake tx', tx.hash);
-      await tx.wait();
-      log('unstake done');
-    } catch(e){ log('unstake err', e && e.message ? e.message : e); }
-  }
-
-  // harvest - contract may or may not expose public harvest; if exists call it, otherwise advise.
-  async function harvest(){
-    try {
-      if(!contracts.staking) { await attachContractsIfSet(); if(!contracts.staking) return alert('Set staking contract'); }
-      // try common signatures
-      if(typeof contracts.staking.harvest === 'function'){
-        const collection = $('nftCollection').value.trim();
-        const tokenId = $('nftTokenId').value.trim();
-        const tx = await contracts.staking.harvest(collection, tokenId);
-        log('harvest tx', tx.hash);
-        await tx.wait();
-        log('harvest done');
-        return;
-      }
-      alert('No public harvest function found in staking ABI — rewards are minted on unstake or via contract-internal logic.');
-    } catch(e){ log('harvest err', e && e.message ? e.message : e); }
-  }
-
-  // ---------- Batch helpers ----------
-  function parseBatchPairs(){
-    const raw = $('batchNFTs').value.trim();
-    if(!raw) return [];
-    const lines = raw.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
-    const pairs = [];
-    for(const ln of lines){
-      const parts = ln.split(',').map(p=>p.trim()).filter(p=>p.length>0);
-      if(parts.length >= 2) pairs.push({collection: parts[0], tokenId: parts[1]});
-    }
-    return pairs;
-  }
-
-  async function batchTermStake(){
-    try {
-      const pairs = parseBatchPairs();
-      if(pairs.length === 0) return alert('No pairs to stake');
-      if(!contracts.staking) { await attachContractsIfSet(); if(!contracts.staking) return alert('Set staking contract'); }
-      // prefer a batch function if present
-      if(typeof contracts.staking.batchTermStake === 'function'){
-        const cols = pairs.map(p=>p.collection);
-        const ids = pairs.map(p=>p.tokenId);
-        const tx = await contracts.staking.batchTermStake(cols, ids);
-        log('batchTermStake tx', tx.hash);
-        await tx.wait();
-        log('batchTermStake done');
-      } else {
-        // fallback sequential
-        for(const p of pairs){
-          const tx = await contracts.staking.termStake(p.collection, p.tokenId);
-          log('termStake seq tx', tx.hash);
-          await tx.wait();
-        }
-        log('batchTermStake sequential done');
-      }
-    } catch(e){ log('batchTermStake err', e && e.message ? e.message : e); }
-  }
-
-  async function batchPermStake(){
-    try {
-      const pairs = parseBatchPairs();
-      if(pairs.length === 0) return alert('No pairs to stake');
-      if(!contracts.staking) { await attachContractsIfSet(); if(!contracts.staking) return alert('Set staking contract'); }
-      if(typeof contracts.staking.batchPermanentStake === 'function'){
-        const cols = pairs.map(p=>p.collection);
-        const ids = pairs.map(p=>p.tokenId);
-        const tx = await contracts.staking.batchPermanentStake(cols, ids);
-        log('batchPermanentStake tx', tx.hash);
-        await tx.wait();
-        log('batchPermanentStake done');
-      } else {
-        for(const p of pairs){
-          const tx = await contracts.staking.permanentStake(p.collection, p.tokenId);
-          log('permanentStake seq tx', tx.hash);
-          await tx.wait();
-        }
-        log('batchPermStake sequential done');
-      }
-    } catch(e){ log('batchPermStake err', e && e.message ? e.message : e); }
-  }
-
-  async function batchUnstake(){
-    try {
-      const pairs = parseBatchPairs();
-      if(pairs.length === 0) return alert('No pairs to unstake');
-      if(!contracts.staking) { await attachContractsIfSet(); if(!contracts.staking) return alert('Set staking contract'); }
-      if(typeof contracts.staking.batchUnstake === 'function'){
-        const cols = pairs.map(p=>p.collection);
-        const ids = pairs.map(p=>p.tokenId);
-        const tx = await contracts.staking.batchUnstake(cols, ids);
-        log('batchUnstake tx', tx.hash);
-        await tx.wait();
-        log('batchUnstake done');
-      } else {
-        for(const p of pairs){
-          const tx = await contracts.staking.unstake(p.collection, p.tokenId);
-          log('unstake seq tx', tx.hash);
-          await tx.wait();
-        }
-        log('batchUnstake sequential done');
-      }
-    } catch(e){ log('batchUnstake err', e && e.message ? e.message : e); }
-  }
-
-	  // Helper: parse textarea "collection,tokenId" lines into objects
-function parseBatchHarvestPairs() {
-  const txt = $('batchHarvestNFTs').value.trim();
-  if (!txt) return [];
-  return txt.split(/\r?\n/).map(line => {
-    const parts = line.split(',').map(s => s.trim()).filter(Boolean);
-    if (parts.length < 2) return null;
-    const collection = parts[0];
-    const tokenId = parts[1];
-    if (!collection || !tokenId) return null;
-    return { collection, tokenId };
-  }).filter(Boolean);
-}
-
-// Check Pending Rewards
-async function checkPendingRewards(){
+// ---------- NFT approval ----------
+async function approveNFT(){
   try {
     const collection = $('nftCollection').value.trim();
-    const tokenId = parseInt($('nftTokenId').value.trim(), 10);
-    if(!collection) return alert('Enter a collection address');
-    if(isNaN(tokenId)) return alert('Enter a valid token ID');
+    if(!collection) return alert('collection required');
+    const stakingAddr = $('addrStaking').value.trim();
+    if(!stakingAddr) return alert('staking address required');
+    const nft = new ethers.Contract(collection, ERC721_ABI, signer);
+    const me = await signer.getAddress();
 
-    if(!contracts.staking){ 
+    showLoading("Approving NFT...");
+    const already = await nft.isApprovedForAll(me, stakingAddr);
+    if(already){ 
+      log('already approved'); 
+      alert('Already approved for staking');
+      return; 
+    }
+    const tx = await nft.setApprovalForAll(stakingAddr, true);
+    log('approve tx', tx.hash);
+    await tx.wait();
+    log('approve complete');
+  } catch(e){ 
+    log('approveNFT err', e?.message || e); 
+    alert(`Approve failed: ${e.message || e}`);
+  } finally {
+    hideLoading();
+  }
+}
+
+// ---------- Staking single ----------
+async function termStake(){
+  try {
+    if(!contracts.staking) { await attachContractsIfSet(); if(!contracts.staking) return alert('Set staking contract'); }
+    const collection = $('nftCollection').value.trim();
+    const tokenId = $('nftTokenId').value.trim();
+    if(!collection || !tokenId) return alert('collection & tokenId required');
+
+    showLoading("Staking (term)...");
+    const tx = await contracts.staking.termStake(collection, tokenId);
+    log('termStake tx', tx.hash);
+    await tx.wait();
+    log('termStake done');
+  } catch(e){ 
+    log('termStake err', e?.message || e); 
+    alert(`Stake failed: ${e.message || e}`);
+  } finally {
+    hideLoading();
+  }
+}
+
+async function permanentStake(){
+  try {
+    if(!contracts.staking) { await attachContractsIfSet(); if(!contracts.staking) return alert('Set staking contract'); }
+    const collection = $('nftCollection').value.trim();
+    const tokenId = $('nftTokenId').value.trim();
+    if(!collection || !tokenId) return alert('collection & tokenId required');
+
+    showLoading("Staking (permanent)...");
+    const tx = await contracts.staking.permanentStake(collection, tokenId);
+    log('permanentStake tx', tx.hash);
+    await tx.wait();
+    log('permanentStake done');
+  } catch(e){ 
+    log('permanentStake err', e?.message || e); 
+    alert(`Permanent stake failed: ${e.message || e}`);
+  } finally {
+    hideLoading();
+  }
+}
+
+async function unstake(){
+  try {
+    if(!contracts.staking) { await attachContractsIfSet(); if(!contracts.staking) return alert('Set staking contract'); }
+    const collection = $('nftCollection').value.trim();
+    const tokenId = $('nftTokenId').value.trim();
+    if(!collection || !tokenId) return alert('collection & tokenId required');
+
+    showLoading("Unstaking...");
+    const tx = await contracts.staking.unstake(collection, tokenId);
+    log('unstake tx', tx.hash);
+    await tx.wait();
+    log('unstake done');
+  } catch(e){ 
+    log('unstake err', e?.message || e); 
+    alert(`Unstake failed: ${e.message || e}`);
+  } finally {
+    hideLoading();
+  }
+}
+
+// harvest - contract may or may not expose public harvest
+async function harvest(){
+  try {
+    if(!contracts.staking) { await attachContractsIfSet(); if(!contracts.staking) return alert('Set staking contract'); }
+    if(typeof contracts.staking.harvest === 'function'){
+      const collection = $('nftCollection').value.trim();
+      const tokenId = $('nftTokenId').value.trim();
+
+      showLoading("Harvesting rewards...");
+      const tx = await contracts.staking.harvest(collection, tokenId);
+      log('harvest tx', tx.hash);
+      await tx.wait();
+      log('harvest done');
+      return;
+    }
+    alert('No public harvest function found in staking ABI');
+  } catch(e){ 
+    log('harvest err', e?.message || e); 
+    alert(e.message || e);
+  } finally {
+    hideLoading();
+  }
+}
+
+	  // ---------- Batch helpers ----------
+function parseBatchPairs() {
+  const raw = $('batchNFTs').value.trim();
+  if (!raw) return [];
+  const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const pairs = [];
+  for (const ln of lines) {
+    const parts = ln.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    if (parts.length >= 2) pairs.push({ collection: parts[0], tokenId: parts[1] });
+  }
+  return pairs;
+}
+
+async function batchTermStake() {
+  try {
+    showLoading();
+
+    const pairs = parseBatchPairs();
+    if (pairs.length === 0) return alert('No pairs to stake');
+    if (!contracts.staking) { 
       await attachContractsIfSet(); 
-      if(!contracts.staking) return alert('Set staking contract'); 
+      if (!contracts.staking) return alert('Set staking contract'); 
     }
 
-    if(typeof contracts.staking.pendingRewards === 'function'){
-      const account = await getAccount();
-      const rewards = await contracts.staking.pendingRewards(collection, account, tokenId);
-      $('pendingRewardsResult').innerText = `${rewards.toString()} CATA`;
-      log('checkPendingRewards done');
+    if (typeof contracts.staking.batchTermStake === 'function') {
+      const cols = pairs.map(p => p.collection);
+      const ids = pairs.map(p => p.tokenId);
+      const tx = await contracts.staking.batchTermStake(cols, ids);
+      log('batchTermStake tx', tx.hash);
+      await tx.wait();
+      log('batchTermStake done');
     } else {
-      alert('pendingRewards not found in ABI');
+      // fallback sequential
+      for (const p of pairs) {
+        const tx = await contracts.staking.termStake(p.collection, p.tokenId);
+        log('termStake seq tx', tx.hash);
+        await tx.wait();
+      }
+      log('batchTermStake sequential done');
     }
-  } catch(e){ 
-    log('checkPendingRewards err', e && e.message ? e.message : e); 
-    alert(e.message || e);
+  } catch (e) { 
+    log('batchTermStake err', e && e.message ? e.message : e); 
+  } finally {
+    hideLoading();
   }
 }
 
-// Refresh Staking Stats
-async function refreshStakingStats(){
+async function batchPermStake() {
   try {
-    if(!contracts.staking){ 
-      await attachContractsIfSet();
-      if(!contracts.staking) return alert('Set staking contract');
+    showLoading();
+
+    const pairs = parseBatchPairs();
+    if (pairs.length === 0) return alert('No pairs to stake');
+    if (!contracts.staking) { 
+      await attachContractsIfSet(); 
+      if (!contracts.staking) return alert('Set staking contract'); 
     }
 
-    if(typeof contracts.staking.totalStakedAll === 'function'){
-      const [all, term, perm] = await Promise.all([
-        contracts.staking.totalStakedAll(),
-        contracts.staking.totalStakedTerm(),
-        contracts.staking.totalStakedPerm()
-      ]);
-
-      $('stakedAll').innerText = all.toString();
-      $('stakedTerm').innerText = term.toString();
-      $('stakedPerm').innerText = perm.toString();
-
-      log('refreshStakingStats done');
+    if (typeof contracts.staking.batchPermanentStake === 'function') {
+      const cols = pairs.map(p => p.collection);
+      const ids = pairs.map(p => p.tokenId);
+      const tx = await contracts.staking.batchPermanentStake(cols, ids);
+      log('batchPermanentStake tx', tx.hash);
+      await tx.wait();
+      log('batchPermanentStake done');
     } else {
-      alert('staking stats functions not found in ABI');
+      for (const p of pairs) {
+        const tx = await contracts.staking.permanentStake(p.collection, p.tokenId);
+        log('permanentStake seq tx', tx.hash);
+        await tx.wait();
+      }
+      log('batchPermStake sequential done');
     }
-  } catch(e){ 
-    log('refreshStakingStats err', e && e.message ? e.message : e); 
-    alert(e.message || e);
+  } catch (e) { 
+    log('batchPermStake err', e && e.message ? e.message : e); 
+  } finally {
+    hideLoading();
   }
 }
 
-// View Portfolio
-async function viewPortfolio(){
+async function batchUnstake() {
   try {
-    const collection = $('nftCollection').value.trim();
-    if(!collection) return alert('Enter a collection address');
+    showLoading();
 
-    if(!contracts.staking){ 
-      await attachContractsIfSet();
-      if(!contracts.staking) return alert('Set staking contract');
+    const pairs = parseBatchPairs();
+    if (pairs.length === 0) return alert('No pairs to unstake');
+    if (!contracts.staking) { 
+      await attachContractsIfSet(); 
+      if (!contracts.staking) return alert('Set staking contract'); 
     }
 
-    if(typeof contracts.staking.stakePortfolioByUser === 'function'){
-      const account = await getAccount();
-      const portfolio = await contracts.staking.stakePortfolioByUser(collection, account);
-      $('portfolioResult').innerText = portfolio.length > 0 
-        ? portfolio.join(', ') 
-        : 'No NFTs staked.';
-
-      log('viewPortfolio done');
+    if (typeof contracts.staking.batchUnstake === 'function') {
+      const cols = pairs.map(p => p.collection);
+      const ids = pairs.map(p => p.tokenId);
+      const tx = await contracts.staking.batchUnstake(cols, ids);
+      log('batchUnstake tx', tx.hash);
+      await tx.wait();
+      log('batchUnstake done');
     } else {
-      alert('stakePortfolioByUser not found in ABI');
+      for (const p of pairs) {
+        const tx = await contracts.staking.unstake(p.collection, p.tokenId);
+        log('unstake seq tx', tx.hash);
+        await tx.wait();
+      }
+      log('batchUnstake sequential done');
     }
-  } catch(e){ 
-    log('viewPortfolio err', e && e.message ? e.message : e); 
-    alert(e.message || e);
+  } catch (e) { 
+    log('batchUnstake err', e && e.message ? e.message : e); 
+  } finally {
+    hideLoading();
   }
 }
-
-
-// Group by collection => { '0xCollA': ['123','124'], '0xCollB': ['555'] }
-function groupByCollection(pairs) {
-  const map = {};
-  for (const p of pairs) {
-    const col = p.collection.toLowerCase();
-    if (!map[col]) map[col] = [];
-    // keep as string or BigInt depending on how you send; strings are fine for ethers
-    map[col].push(p.tokenId.toString());
-  }
-  return map;
-}
-
+ 
 async function batchHarvest() {
   try {
     const pairs = parseBatchHarvestPairs();
-    if (pairs.length === 0) {
-      alert('No pairs to harvest');
-      return;
-    }
+    if (pairs.length === 0) return alert('No pairs to harvest');
 
-    // ensure contracts.staking exists (attach if needed)
     if (!contracts || !contracts.staking) {
       if (typeof attachContractsIfSet === 'function') {
         await attachContractsIfSet();
       }
       if (!contracts || !contracts.staking) {
-        return alert('Staking contract not set. Set addresses and attach contracts first.');
+        return alert('Staking contract not set.');
       }
     }
 
-    // Prefer calling harvestBatch(collection, uint256[] tokenIds)
+    showLoading("Batch harvesting...");
     const byCollection = groupByCollection(pairs);
-
-    // Detect if harvestBatch exists in ABI
     const hasHarvestBatch = typeof contracts.staking.harvestBatch === 'function';
     const hasHarvestSingle = typeof contracts.staking.harvest === 'function';
 
@@ -1884,20 +1896,17 @@ async function batchHarvest() {
       return alert('Contract ABI lacks harvestBatch and harvest functions.');
     }
 
-    // Iterate groups
     for (const colLower of Object.keys(byCollection)) {
-      const collection = colLower; // already lowercase; contract accepts checksummed address too
+      const collection = colLower;
       const ids = byCollection[colLower];
 
       if (hasHarvestBatch) {
-        // call harvestBatch(collection, uint256[] tokenIds)
         log('calling harvestBatch for', collection, 'ids:', ids);
         const tx = await contracts.staking.harvestBatch(collection, ids);
         log('harvestBatch tx', tx.hash);
         await tx.wait();
         log('harvestBatch confirmed for', collection);
       } else {
-        // fallback: call harvest(collection, tokenId) for each id
         for (const id of ids) {
           log('calling harvest for', collection, id);
           const tx = await contracts.staking.harvest(collection, id);
@@ -1907,14 +1916,198 @@ async function batchHarvest() {
         }
       }
     }
+    log('batchHarvest: done for all collections');
+  } catch (err) {
+    log('batchHarvest err', err?.message || err);
+  } finally {
+    hideLoading();
+  }
+}
+
+	  // Helper: parse textarea "collection,tokenId" lines into objects
+function parseBatchHarvestPairs() {
+  try {
+    showLoading();
+
+    const txt = $('batchHarvestNFTs').value.trim();
+    if (!txt) return [];
+
+    return txt
+      .split(/\r?\n/)
+      .map(line => {
+        const parts = line.split(',').map(s => s.trim()).filter(Boolean);
+        if (parts.length < 2) return null;
+        const collection = parts[0];
+        const tokenId = parts[1];
+        if (!collection || !tokenId) return null;
+        return { collection, tokenId };
+      })
+      .filter(Boolean);
+
+  } finally {
+    hideLoading();
+  }
+}
+
+
+// Check Pending Rewards
+async function checkPendingRewards(){
+  try {
+    showLoading();
+
+    const collection = $('nftCollection').value.trim();
+    const tokenId = parseInt($('nftTokenId').value.trim(), 10);
+    if(!collection) return alert('Enter a collection address');
+    if(isNaN(tokenId)) return alert('Enter a valid token ID');
+
+    if(!contracts.staking){   
+      await attachContractsIfSet();   
+      if(!contracts.staking) return alert('Set staking contract');   
+    }  
+
+    if(typeof contracts.staking.pendingRewards === 'function'){  
+      const account = await getAccount();  
+      const rewards = await contracts.staking.pendingRewards(collection, account, tokenId);  
+      $('pendingRewardsResult').innerText = `${rewards.toString()} CATA`;  
+      log('checkPendingRewards done');  
+    } else {  
+      alert('pendingRewards not found in ABI');  
+    }
+
+  } catch(e){
+    log('checkPendingRewards err', e && e.message ? e.message : e);
+    alert(e.message || e);
+  } finally {
+    hideLoading();
+  }
+}
+
+// Refresh Staking Stats
+async function refreshStakingStats(){
+  try {
+    showLoading();
+
+    if(!contracts.staking){
+      await attachContractsIfSet();
+      if(!contracts.staking) return alert('Set staking contract');
+    }
+
+    if(typeof contracts.staking.totalStakedAll === 'function'){  
+      const [all, term, perm] = await Promise.all([  
+        contracts.staking.totalStakedAll(),  
+        contracts.staking.totalStakedTerm(),  
+        contracts.staking.totalStakedPerm()  
+      ]);  
+
+      $('stakedAll').innerText = all.toString();  
+      $('stakedTerm').innerText = term.toString();  
+      $('stakedPerm').innerText = perm.toString();  
+
+      log('refreshStakingStats done');  
+    } else {  
+      alert('staking stats functions not found in ABI');  
+    }
+
+  } catch(e){
+    log('refreshStakingStats err', e && e.message ? e.message : e);
+    alert(e.message || e);
+  } finally {
+    hideLoading();
+  }
+}
+
+// View Portfolio
+async function viewPortfolio(){
+  try {
+    showLoading();
+
+    const collection = $('nftCollection').value.trim();
+    if(!collection) return alert('Enter a collection address');
+
+    if(!contracts.staking){   
+      await attachContractsIfSet();  
+      if(!contracts.staking) return alert('Set staking contract');  
+    }  
+
+    if(typeof contracts.staking.stakePortfolioByUser === 'function'){  
+      const account = await getAccount();  
+      const portfolio = await contracts.staking.stakePortfolioByUser(collection, account);  
+      $('portfolioResult').innerText = portfolio.length > 0   
+        ? portfolio.join(', ')   
+        : 'No NFTs staked.';  
+
+      log('viewPortfolio done');  
+    } else {  
+      alert('stakePortfolioByUser not found in ABI');  
+    }
+
+  } catch(e){
+    log('viewPortfolio err', e && e.message ? e.message : e);
+    alert(e.message || e);
+  } finally {
+    hideLoading();
+  }
+}
+
+// Batch Harvest
+async function batchHarvest() {
+  try {
+    showLoading();
+
+    const pairs = parseBatchHarvestPairs();
+    if (pairs.length === 0) {
+      alert('No pairs to harvest');
+      return;
+    }
+
+    if (!contracts || !contracts.staking) {  
+      if (typeof attachContractsIfSet === 'function') {  
+        await attachContractsIfSet();  
+      }  
+      if (!contracts || !contracts.staking) {  
+        return alert('Staking contract not set. Set addresses and attach contracts first.');  
+      }  
+    }  
+
+    const byCollection = groupByCollection(pairs);  
+    const hasHarvestBatch = typeof contracts.staking.harvestBatch === 'function';  
+    const hasHarvestSingle = typeof contracts.staking.harvest === 'function';  
+
+    if (!hasHarvestBatch && !hasHarvestSingle) {  
+      return alert('Contract ABI lacks harvestBatch and harvest functions.');  
+    }  
+
+    for (const colLower of Object.keys(byCollection)) {  
+      const collection = colLower;  
+      const ids = byCollection[colLower];  
+
+      if (hasHarvestBatch) {  
+        log('calling harvestBatch for', collection, 'ids:', ids);  
+        const tx = await contracts.staking.harvestBatch(collection, ids);  
+        log('harvestBatch tx', tx.hash);  
+        await tx.wait();  
+        log('harvestBatch confirmed for', collection);  
+      } else {  
+        for (const id of ids) {  
+          log('calling harvest for', collection, id);  
+          const tx = await contracts.staking.harvest(collection, id);  
+          log('harvest tx', tx.hash);  
+          await tx.wait();  
+          log('harvest confirmed', id);  
+        }  
+      }  
+    }  
 
     log('batchHarvest: done for all collections');
   } catch (err) {
     log('batchHarvest err', err && err.message ? err.message : err);
+  } finally {
+    hideLoading();
   }
 }
 
-    // ---------- Governance Section ----------
+
+  // ---------- Governance Section ----------
 const PROPOSAL_MAPPING = {
   BASE_REWARD: 0,
   HARVEST_FEE: 1,
@@ -1932,7 +2125,7 @@ const PROPOSAL_MAPPING = {
   UPGRADE_COUNCIL: 13
 };
 
-// Toggle extra input fields when proposal type changes
+// UI toggle fields
 $('proposalType').addEventListener('change', () => {
   const type = $('proposalType').value;
   $('tierUpgradeRow').classList.add('hidden');
@@ -1940,31 +2133,27 @@ $('proposalType').addEventListener('change', () => {
   $('newDaoRow').classList.add('hidden');
   $('upgradeCouncilRow').classList.add('hidden');
 
-  if (type === 'TIER_UPGRADE') {
-    $('tierUpgradeRow').classList.remove('hidden');
-  } else if (type === 'COUNCIL_RESEED_ACTIVE' || type === 'COUNCIL_PROPOSE_STANDBY') {
-    $('councilBatchRow').classList.remove('hidden');
-  } else if (type === 'COUNCIL_PROPOSE_NEW_DAO') {
-    $('newDaoRow').classList.remove('hidden');
-  } else if (type === 'UPGRADE_COUNCIL') {
-    $('upgradeCouncilRow').classList.remove('hidden');
-  }
+  if (type === 'TIER_UPGRADE') $('tierUpgradeRow').classList.remove('hidden');
+  if (type === 'COUNCIL_RESEED_ACTIVE' || type === 'COUNCIL_PROPOSE_STANDBY') $('councilBatchRow').classList.remove('hidden');
+  if (type === 'COUNCIL_PROPOSE_NEW_DAO') $('newDaoRow').classList.remove('hidden');
+  if (type === 'UPGRADE_COUNCIL') $('upgradeCouncilRow').classList.remove('hidden');
 });
 
 // Create Proposal
-async function createProposal() {
+$('createProposalBtn').onclick = async () => {
   try {
     if (!contracts.governance) {
       await attachContractsIfSet();
-      if (!contracts.governance) return alert('Governance not set');
+      if (!contracts.governance) return alert('⚠️ Governance not set');
     }
+
+    showLoading();
 
     const typeStr = $('proposalType').value;
     const pType = PROPOSAL_MAPPING[typeStr];
 
     let paramTarget = parseInt($('paramTarget').value || '0');
-    let newValueRaw = $('proposalValue').value.trim() || '0';
-    let newValue = ethers.BigNumber.from(newValueRaw);
+    let newValue = ethers.BigNumber.from($('proposalValue').value.trim() || '0');
     let ctx = $('proposalCollectionCtx').value.trim() || ethers.constants.AddressZero;
 
     if (typeStr === 'TIER_UPGRADE') {
@@ -1973,488 +2162,303 @@ async function createProposal() {
       newValue = ethers.BigNumber.from($('tierDeclaredSupply').value || '0');
     } else if (typeStr === 'COUNCIL_RESEED_ACTIVE' || typeStr === 'COUNCIL_PROPOSE_STANDBY') {
       const addrs = Array.from(document.querySelectorAll('.councilAddr')).map(el => el.value.trim());
-      if (addrs.length !== 7 || addrs.some(a => !a)) return alert('Must provide 7 guardian addresses');
+      if (addrs.length !== 7 || addrs.some(a => !ethers.utils.isAddress(a))) {
+        hideLoading();
+        return alert('⚠️ Must provide 7 valid guardian addresses');
+      }
       const payload = await contracts.governance.encodeCouncilBatch(addrs);
       ctx = payload;
       newValue = 0;
       paramTarget = 0;
     } else if (typeStr === 'COUNCIL_PROPOSE_NEW_DAO') {
-      ctx = $('newDaoAddr').value.trim();
+      ctx = $('govNewDaoAddr').value.trim();
+      if (!ethers.utils.isAddress(ctx)) {
+        hideLoading();
+        return alert("⚠️ Invalid DAO address");
+      }
     } else if (typeStr === 'UPGRADE_COUNCIL') {
       ctx = $('newCouncilImpl').value.trim();
+      if (!ethers.utils.isAddress(ctx)) {
+        hideLoading();
+        return alert("⚠️ Invalid council implementation address");
+      }
     }
 
     const tx = await contracts.governance.propose(pType, paramTarget, newValue, ctx);
     log('propose tx', tx.hash);
     await tx.wait();
-    log('proposal created');
-  } catch (e) {
-    log('createProposal err', e.message || e);
-  }
-}
 
-// Vote
-async function voteProposal() {
-  try {
-    if (!contracts.governance) {
-      await attachContractsIfSet();
-      if (!contracts.governance) return alert('Governance not set');
-    }
-    const id = $('proposalId').value.trim();
-    if (!id) return alert('Proposal ID required');
-    const ctx = $('proposalCollectionCtx').value.trim() || ethers.constants.AddressZero;
-    const tx = await contracts.governance.vote(id, ctx);
-    log('vote tx', tx.hash);
-    await tx.wait();
-    log('voted');
-  } catch (e) {
-    log('voteProposal err', e.message || e);
-  }
-}
-
-// Execute
-async function execProposal() {
-  try {
-    if (!contracts.governance) {
-      await attachContractsIfSet();
-      if (!contracts.governance) return alert('Governance not set');
-    }
-    const id = $('proposalId').value.trim();
-    if (!id) return alert('Proposal ID required');
-    const tx = await contracts.governance.executeProposal(id);
-    log('exec tx', tx.hash);
-    await tx.wait();
-    log('executed');
-  } catch (e) {
-    log('execProposal err', e.message || e);
-  }
-}
-
-// Fetch Proposal Details
-async function fetchProposal() {
-  try {
-    if (!contracts.governance) {
-      await attachContractsIfSet();
-      if (!contracts.governance) return alert('Governance not set');
-    }
-    const id = $('proposalId').value.trim();
-    if (!id) return alert('Proposal ID required');
-    let info = null;
-    try { info = await contracts.governance.proposals(id); } catch (e) { /* ignore */ }
-    try { if (!info) info = await contracts.governance.proposalPayloads(id); } catch (e) {}
-    log('proposal fetch', info || 'no data');
-  } catch (e) {
-    log('fetchProposal err', e.message || e);
-  }
-}
-
-// ---------- Proposal Explorer ----------
-const proposalsMap = {};
-
-function renderProposalsTable() {
-  const tbody = $('proposalsTbody');
-  tbody.innerHTML = '';
-  Object.values(proposalsMap).forEach(p => {
-    const tr = document.createElement('tr');
-    tr.className = 'border-t border-slate-700';
-    tr.innerHTML = `
-      <td class="p-2 font-mono text-xs">${p.id}</td>
-      <td class="p-2">${p.type}</td>
-      <td class="p-2">${p.value}</td>
-      <td class="p-2">${p.ctx}</td>
-      <td class="p-2">${p.proposer || '-'}</td>
-      <td class="p-2">${p.votes || 0}</td>
-      <td class="p-2">${p.executed ? 'Yes' : 'No'}</td>
-      <td class="p-2">
-        <button class="p-1 bg-slate-600 rounded text-xs" onclick="$('proposalId').value='${p.id}'">Load</button>
-      </td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-// Governance Event Listeners
-function startGovernanceListeners() {
-  if (!contracts.governance) return;
-  const g = contracts.governance;
-
-  g.on("ProposalCreated", (id, proposer, pType) => {
-    const pid = id.toString();
-    proposalsMap[pid] = { id: pid, proposer, type: pType.toString(), value: '—', ctx: '—', votes: 0, executed: false };
-    renderProposalsTable();
-  });
-
-  g.on("VoteCast", (voter, id, support, votes) => {
-    const pid = id.toString();
-    proposalsMap[pid] = proposalsMap[pid] || { id: pid };
-    proposalsMap[pid].votes = (proposalsMap[pid].votes || 0) + parseInt(votes.toString());
-    renderProposalsTable();
-  });
-
-  g.on("ProposalExecuted", (id) => {
-    const pid = id.toString();
-    proposalsMap[pid] = proposalsMap[pid] || { id: pid };
-    proposalsMap[pid].executed = true;
-    renderProposalsTable();
-  });
-}
-
-// Start event listeners once contracts are attached + bind buttons
-window.addEventListener('DOMContentLoaded', async () => {
-  await attachContractsIfSet();
-  startGovernanceListeners();
-});
-   
-	  // Guardian Council contract functions
-// ---------- DAO ----------
-async function proposeDao(){
-  try {
-    if(!contracts.council) return alert("Council contract not attached");
-    const newDao = $('newDaoAddr').value.trim();
-    if(!newDao) return alert("Enter DAO address");
-    const tx = await contracts.council.proposeNewDAO(newDao);
-    log('propose DAO tx', tx.hash);
-    await tx.wait();
-    log('DAO proposal submitted');
-    alert("✅ DAO proposal submitted");
-  } catch(e){
-    log('proposeDao err', e && e.message ? e.message : e);
-    alert(e.message || e);
-  }
-}
-
-async function commitDao(){
-  try {
-    if(!contracts.council) return alert("Council contract not attached");
-    const tx = await contracts.council.commitNewDAO();
-    log('commit DAO tx', tx.hash);
-    await tx.wait();
-    log('DAO committed');
-    alert("✅ DAO committed");
-  } catch(e){
-    log('commitDao err', e && e.message ? e.message : e);
-    alert(e.message || e);
-  }
-}
-
-// Active Batch
-async function proposeActiveBatch(){
-  try {
-    if(!contracts.council) return alert("Council contract not attached");
-    const arr = parse7($('activeBatchInput').value);
-    const tx = await contracts.council.daoProposeSeedActiveBatch(arr);
-    log('propose active batch tx', tx.hash);
-    await tx.wait();
-    log('proposeActiveBatch done');
-    alert("✅ Active batch proposed");
-  } catch(e){
-    log('proposeActiveBatch err', e && e.message ? e.message : e);
-    alert(e.message || e);
-  }
-}
-
-async function commitActiveBatch(){
-  try {
-    if(!contracts.council) return alert("Council contract not attached");
-    const tx = await contracts.council.daoCommitSeedActiveBatch();
-    log('commit active batch tx', tx.hash);
-    await tx.wait();
-    log('commitActiveBatch done');
-    alert("✅ Active batch committed");
-  } catch(e){
-    log('commitActiveBatch err', e && e.message ? e.message : e);
-    alert(e.message || e);
-  }
-}
-
-// Standby Batch
-async function proposeStandbyBatch(){
-  try {
-    if(!contracts.council) return alert("Council contract not attached");
-    const arr = parse7($('standbyBatchInput').value);
-    const tx = await contracts.council.daoProposeSeedStandbyBatch(arr);
-    log('propose standby batch tx', tx.hash);
-    await tx.wait();
-    log('proposeStandbyBatch done');
-    alert("✅ Standby batch proposed");
-  } catch(e){
-    log('proposeStandbyBatch err', e && e.message ? e.message : e);
-    alert(e.message || e);
-  }
-}
-
-async function commitStandbyBatch(){
-  try {
-    if(!contracts.council) return alert("Council contract not attached");
-    const tx = await contracts.council.daoCommitSeedStandbyBatch();
-    log('commit standby batch tx', tx.hash);
-    await tx.wait();
-    log('commitStandbyBatch done');
-    alert("✅ Standby batch committed");
-  } catch(e){
-    log('commitStandbyBatch err', e && e.message ? e.message : e);
-    alert(e.message || e);
-  }
-}
-
-async function activateStandby(){
-  try {
-    if(!contracts.council) return alert("Council contract not attached");
-    const tx = await contracts.council.daoActivateStandby();
-    log('activate standby tx', tx.hash);
-    await tx.wait();
-    log('activateStandby done');
-    alert("✅ Standby batch activated");
-  } catch(e){
-    log('activateStandby err', e && e.message ? e.message : e);
-    alert(e.message || e);
-  }
-}
-
-// Lock
-async function clearLock(){
-  try {
-    if(!contracts.council) return alert("Council contract not attached");
-    const tx = await contracts.council.daoClearLockAndWarning();
-    log('clear lock tx', tx.hash);
-    await tx.wait();
-    log('clearLock done');
-    alert("✅ Lock cleared");
-  } catch(e){
-    log('clearLock err', e && e.message ? e.message : e);
-    alert(e.message || e);
-  }
-}
-
-// Parse helper
-function parse7(txt){
-  const arr = txt.split('\n').map(s=>s.trim()).filter(Boolean);
-  if(arr.length !== 7) throw new Error("Need exactly 7 addresses");
-  return arr;
-}
-	  
-// Recovery
-async function proposeRecovery(){
-  try {
-    const kind = parseInt($('recoveryKind').value, 10);
-    const proposed = $('recoveryProposed').value.trim();
-    const callTarget = $('recoveryCallTarget').value.trim();
-    const callData = $('recoveryCallData').value.trim();
-
-    if(!proposed || !callTarget || !callData) {
-      return alert("Fill all recovery fields");
-    }
-
-    const tx = await contracts.council.proposeRecovery(kind, proposed, callTarget, callData);
-    log('proposeRecovery tx', tx.hash);
-    await tx.wait();
-    log('Recovery proposed');
-    alert("Recovery proposal submitted!");
-  } catch(e) {
-    log('proposeRecovery err', e);
-    alert(e.message || e);
-  }
-}
-
-async function approveRecovery(){
-  try {
-    const kind = parseInt($('recoveryKind').value, 10);
-    const tx = await contracts.council.approveRecovery(kind);
-    log('approveRecovery tx', tx.hash);
-    await tx.wait();
-    log('Recovery approved');
-    alert("Recovery approved!");
-  } catch(e) {
-    log('approveRecovery err', e);
-    alert(e.message || e);
-  }
-}
-
-async function executeRecovery(){
-  try {
-    const kind = parseInt($('recoveryKind').value, 10);
-    const tx = await contracts.council.executeRecovery(kind);
-    log('executeRecovery tx', tx.hash);
-    await tx.wait();
-    log('Recovery executed');
-    alert("Recovery executed!");
-  } catch(e) {
-    log('executeRecovery err', e);
-    alert(e.message || e);
-  }
-}
-
-async function vetoRecovery(){
-  try {
-    const kind = parseInt($('recoveryKind').value, 10);
-    const tx = await contracts.council.lastHonestHaltAndPromote(kind);
-    log('vetoRecovery tx', tx.hash);
-    await tx.wait();
-    log('Recovery vetoed');
-    alert("Recovery vetoed!");
-  } catch(e) {
-    log('vetoRecovery err', e);
-    alert(e.message || e);
-  }
-}
-
-	  // Encode calldata helper
-async function encodeCallData() {
-  try {
-    const fnSig = $('recoveryFunction').value.trim(); // e.g. "upgradeTo(address)"
-    const args = $('recoveryArgs').value.trim().split(',').map(s => s.trim()).filter(Boolean);
-
-    if (!fnSig) return alert("Enter function signature");
-    
-    // Create ethers.js Interface
-    const iface = new ethers.utils.Interface([ "function " + fnSig ]);
-    const fnName = fnSig.split('(')[0]; // extract name before '('
-
-    const callData = iface.encodeFunctionData(fnName, args);
-    $('recoveryCallData').value = callData;
-
-    alert("✅ CallData encoded!");
+    alert("✅ Proposal created!");
   } catch (e) {
     console.error(e);
-    alert("Error encoding callData: " + (e.message || e));
+    alert("❌ " + (e.reason || e.message || e));
+  } finally {
+    hideLoading();
   }
-}
+};
 
-// -------------------- READ-ONLY HELPERS --------------------
-// DAO
-async function fetchDaoInfo() {
+// Vote
+$('voteProposalBtn').onclick = async () => {
   try {
-    if (!contracts.council) return alert("Council contract not set");
+    if (!contracts.governance) await attachContractsIfSet();
+    const id = $('proposalId').value.trim();
+    if (!id) return alert('⚠️ Proposal ID required');
 
-    const daoAddr = await contracts.council.dao();
-    $('daoAddr').innerText = daoAddr;
-
-    log("fetchDaoInfo done ✅");
+    showLoading();
+    const ctx = $('proposalCollectionCtx').value.trim() || ethers.constants.AddressZero;
+    const tx = await contracts.governance.vote(id, ctx);
+    await tx.wait();
+    alert("✅ Vote cast!");
   } catch (e) {
-    console.error("fetchDaoInfo err", e);
-    $('daoAddr').innerText = "Error: " + (e.message || e);
+    alert("❌ " + (e.reason || e.message || e));
+  } finally {
+    hideLoading();
   }
-}
+};
 
-
-// Guardians
-async function fetchGuardians() {
+// Execute
+$('execProposalBtn').onclick = async () => {
   try {
-    if (!contracts.council) return alert("Council contract not set");
+    if (!contracts.governance) await attachContractsIfSet();
+    const id = $('proposalId').value.trim();
+    if (!id) return alert('⚠️ Proposal ID required');
 
+    showLoading();
+    const tx = await contracts.governance.executeProposal(id);
+    await tx.wait();
+    alert("✅ Proposal executed!");
+  } catch (e) {
+    alert("❌ " + (e.reason || e.message || e));
+  } finally {
+    hideLoading();
+  }
+};
+
+// Fetch Proposal
+$('fetchProposalBtn').onclick = async () => {
+  try {
+    if (!contracts.governance) await attachContractsIfSet();
+    const id = $('proposalId').value.trim();
+    if (!id) return alert('⚠️ Proposal ID required');
+
+    showLoading();
+    const info = await contracts.governance.proposals(id).catch(() => null);
+    hideLoading();
+
+    if (info) {
+      log('proposal fetch', info);
+    } else {
+      alert("⚠️ Proposal not found");
+    }
+  } catch (e) {
+    hideLoading();
+    alert("❌ " + (e.reason || e.message || e));
+  }
+};
+
+    
+	  // Parse helper for 7 addresses
+function parse7(txt) {
+    const arr = txt.split('\n').map(s => s.trim()).filter(Boolean);
+    if (arr.length !== 7) throw new Error("Need exactly 7 addresses");
+    return arr;
+}
+	  
+// ---------- Guardian Council 
+// ---------- Council JS ----------
+// DAO Rotation
+$('proposeDaoBtn').onclick = async () => {
+  try {
+    if (!contracts.council) return alert("Council not attached");
+    showLoading();
+    const newDao = $('councilNewDaoAddr').value.trim();
+    if (!ethers.utils.isAddress(newDao)) throw new Error("Invalid DAO address");
+    const tx = await contracts.council.proposeNewDAO(newDao);
+    await tx.wait();
+    alert("✅ DAO proposed");
+  } catch (e) {
+    alert("❌ " + (e.reason || e.message));
+  } finally {
+    hideLoading();
+  }
+};
+
+$('commitDaoBtn').onclick = async () => {
+  try {
+    if (!contracts.council) return alert("Council not attached");
+    showLoading();
+    const tx = await contracts.council.commitNewDAO();
+    await tx.wait();
+    alert("✅ DAO committed");
+  } catch (e) {
+    alert("❌ " + (e.reason || e.message));
+  } finally {
+    hideLoading();
+  }
+};
+
+// Guardian Batches
+$('proposeActiveBatchBtn').onclick = async () => {
+  try {
+    showLoading();
+    const arr = parse7($('activeBatchInput').value);
+    const tx = await contracts.council.daoProposeSeedActiveBatch(arr);
+    await tx.wait();
+    alert("✅ Active batch proposed");
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+$('commitActiveBatchBtn').onclick = async () => {
+  try {
+    showLoading();
+    const tx = await contracts.council.daoCommitSeedActiveBatch();
+    await tx.wait();
+    alert("✅ Active batch committed");
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+$('proposeStandbyBatchBtn').onclick = async () => {
+  try {
+    showLoading();
+    const arr = parse7($('standbyBatchInput').value);
+    const tx = await contracts.council.daoProposeSeedStandbyBatch(arr);
+    await tx.wait();
+    alert("✅ Standby batch proposed");
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+$('commitStandbyBatchBtn').onclick = async () => {
+  try {
+    showLoading();
+    const tx = await contracts.council.daoCommitSeedStandbyBatch();
+    await tx.wait();
+    alert("✅ Standby batch committed");
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+$('activateStandbyBtn').onclick = async () => {
+  try {
+    showLoading();
+    const tx = await contracts.council.daoActivateStandby();
+    await tx.wait();
+    alert("✅ Standby activated");
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+// Lock
+$('clearLockBtn').onclick = async () => {
+  try {
+    showLoading();
+    const tx = await contracts.council.daoClearLockAndWarning();
+    await tx.wait();
+    alert("✅ Lock cleared");
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+// Recovery
+$('encodeCallDataBtn').onclick = async () => {
+  try {
+    const fnSig = $('recoveryFunction').value.trim();
+    const args = $('recoveryArgs').value.trim().split(',').map(a => a.trim()).filter(Boolean);
+    const iface = new ethers.utils.Interface([`function ${fnSig}`]);
+    const fnName = fnSig.split('(')[0];
+    $('recoveryCallData').value = iface.encodeFunctionData(fnName, args);
+    alert("✅ Calldata encoded");
+  } catch (e) { alert("❌ " + (e.message || e)); }
+};
+
+$('proposeRecoveryBtn').onclick = async () => {
+  try {
+    showLoading();
+    const kind = parseInt($('recoveryKind').value, 10);
+    const proposed = $('recoveryProposed').value.trim();
+    const target = $('recoveryCallTarget').value.trim();
+    const calldata = $('recoveryCallData').value.trim();
+    const tx = await contracts.council.proposeRecovery(kind, proposed, target, calldata);
+    await tx.wait();
+    alert("✅ Recovery proposed");
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+$('approveRecoveryBtn').onclick = async () => {
+  try { showLoading(); const kind = parseInt($('recoveryKind').value, 10);
+    const tx = await contracts.council.approveRecovery(kind); await tx.wait(); alert("✅ Recovery approved");
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+$('executeRecoveryBtn').onclick = async () => {
+  try { showLoading(); const kind = parseInt($('recoveryKind').value, 10);
+    const tx = await contracts.council.executeRecovery(kind); await tx.wait(); alert("✅ Recovery executed");
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+$('vetoRecoveryBtn').onclick = async () => {
+  try { showLoading(); const kind = parseInt($('recoveryKind').value, 10);
+    const tx = await contracts.council.lastHonestHaltAndPromote(kind); await tx.wait(); alert("✅ Recovery vetoed");
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+// ---------- Read-only State ----------
+
+$('refreshDaoBtn').onclick = async () => {
+  try {
+    showLoading();
+    const dao = await contracts.council.dao();
+    const [pending, earliest, deadline] = await contracts.council.getPendingDAOState();
+    $('daoAddr').innerText = dao;
+    $('pendingDaoAddr').innerText = pending;
+    $('pendingDaoWindow').innerText = `Earliest: ${new Date(earliest*1000).toLocaleString()} | Deadline: ${new Date(deadline*1000).toLocaleString()}`;
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+$('refreshGuardiansBtn').onclick = async () => {
+  try {
+    showLoading();
     const active = await contracts.council.getActiveGuardians();
     const standby = await contracts.council.getStandbyGuardians();
+    const [pa, paEarliest, paDeadline] = await contracts.council.getPendingActiveBatchState();
+    const [ps, psEarliest, psDeadline] = await contracts.council.getPendingStandbyBatchState();
+    $('activeGuardians').innerText = active.join("\n");
+    $('standbyGuardians').innerText = standby.join("\n");
+    $('pendingActiveGuardians').innerText = pa.join("\n");
+    $('pendingActiveWindow').innerText = `Earliest: ${new Date(paEarliest*1000).toLocaleString()} | Deadline: ${new Date(paDeadline*1000).toLocaleString()}`;
+    $('pendingStandbyGuardians').innerText = ps.join("\n");
+    $('pendingStandbyWindow').innerText = `Earliest: ${new Date(psEarliest*1000).toLocaleString()} | Deadline: ${new Date(psDeadline*1000).toLocaleString()}`;
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
 
-    $('activeGuardians').innerText = active.join("\n") || "None";
-    $('standbyGuardians').innerText = standby.join("\n") || "None";
-
-    log("fetchGuardians done ✅");
-  } catch (e) {
-    console.error("fetchGuardians err", e);
-    $('activeGuardians').innerText = "Error loading";
-    $('standbyGuardians').innerText = "Error loading";
-  }
-}
-
-
-// Lock / health
-async function fetchLockStatus() {
+$('refreshLockBtn').onclick = async () => {
   try {
-    if (!contracts.council) return alert("Council contract not set");
-
+    showLoading();
     const locked = await contracts.council.locked();
     $('lockStatus').innerText = locked ? "🔒 Locked" : "✅ Unlocked";
-
-    log("fetchLockStatus done ✅");
-  } catch (e) {
-    console.error("fetchLockStatus err", e);
-    $('lockStatus').innerText = "Error: " + (e.message || e);
-  }
-}
+  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
 
 
-// Recovery approvals (who approved)
-async function fetchRecoveryApprovals(kind) {
-  try {
-    if (!contracts.council) return alert("Council contract not set");
 
-    const nonce = await contracts.council.getRequestNonce(kind);
-    const guardians = await contracts.council.getActiveGuardians();
-
-    const approvedList = [];
-    for (const g of guardians) {
-      const lastApproved = await contracts.council.getLastApprovedNonce(kind, g);
-      if (lastApproved.toString() === nonce.toString()) {
-        approvedList.push(g);
-      }
-    }
-
-    $('riApprovers').innerText = approvedList.length > 0
-      ? approvedList.join("\n")
-      : "None yet";
-
-    log("fetchRecoveryApprovals done ✅");
-  } catch (e) {
-    console.error("fetchRecoveryApprovals err", e);
-    $('riApprovers').innerText = "Error: " + (e.message || e);
-  }
-}
-
-
-// Full recovery state
-async function fetchFullRecoveryState() {
-  try {
-    if (!contracts.council) return alert("Council contract not set");
-
-    const kind = parseInt($('recoveryKind').value, 10);
-    if (isNaN(kind)) return alert("Select a valid recovery kind");
-
-    const [proposed, approvals, deadline, executed, callTarget, callData] =
-      await contracts.council.getRecoveryState(kind);
-
-    const [guardian, expiry] = await contracts.council.getTempVeto();
-    const nonce = await contracts.council.getRequestNonce(kind);
-
-    $('riProposed').innerText = proposed;
-    $('riApprovals').innerText = `${approvals} approvals`;
-    $('riDeadline').innerText = new Date(deadline * 1000).toLocaleString();
-    $('riExecuted').innerText = executed ? "✅ Yes" : "❌ No";
-    $('riCallTarget').innerText = callTarget;
-    $('riCallData').innerText = callData;
-    $('riGuardian').innerText = guardian;
-    $('riVetoExpiry').innerText = expiry > 0 ? new Date(expiry * 1000).toLocaleString() : "-";
-    $('riNonce').innerText = nonce.toString();
-
-    await fetchRecoveryApprovals(kind);
-
-    log("fetchFullRecoveryState done ✅");
-  } catch (e) {
-    console.error("fetchFullRecoveryState err", e);
-    alert("Error loading recovery info: " + (e.message || e));
-  }
-}
-	  
   // ---------- Bind UI on load ----------
   window.addEventListener('load', async ()=>{
-    loadSavedAddrs();
-    await loadABIs(); // pre-load ABIs for faster attach later
+  // Manually set the default addresses
+  $('addrCata').value = DEFAULT_ADDRS.cata;
+  $('addrStaking').value = DEFAULT_ADDRS.staking;
+  $('addrGovernance').value = DEFAULT_ADDRS.governance;
+  $('addrCouncil').value = DEFAULT_ADDRS.council;
 
-    // Connect / disconnect
-    $('connectBtn').onclick = connect;
-    $('disconnectBtn').onclick = disconnect;
-	  
-    // Save/load addresses
-    $('saveAddrs').onclick = ()=>{
-      const payload = {
-        addrCata: $('addrCata').value.trim(),
-        addrStaking: $('addrStaking').value.trim(),
-        addrGovernance: $('addrGovernance').value.trim(),
-        addrCouncil: $('addrCouncil').value.trim()
-      };
-      saveAddrsToLocal(payload);
-      // try attach if already connected
-      if(signer) attachContractsIfSet();
-    };
-    $('loadAddrs').onclick = ()=>{ loadSavedAddrs(); if(signer) attachContractsIfSet(); };
+  await loadABIs();
+
+  // Connect / disconnect
+  $('connectBtn').onclick = connect;
+  $('disconnectBtn').onclick = disconnect;
+
+  // Refreshes the contracts based on the addresses in the input fields
+  $('saveAddrs').onclick = ()=>{
+    if(signer) attachContractsIfSet();
+  };
+
+  $('loadAddrs').onclick = ()=>{
+    if(signer) attachContractsIfSet();
+  };
 		
     // CATA
 	$('cataBurnBtn').onclick = cataBurn;
@@ -2515,38 +2519,6 @@ $('batchHarvestBtn').onclick = batchHarvest;
 $('pendingRewardsBtn').onclick = checkPendingRewards;
 $('refreshStakingStatsBtn').onclick = refreshStakingStats;
 $('viewPortfolioBtn').onclick = viewPortfolio;
-	
-
-    // Governance
-  $('createProposalBtn').onclick = createProposal;
-  $('voteProposalBtn').onclick = voteProposal;
-  $('execProposalBtn').onclick = execProposal;
-  $('fetchProposalBtn').onclick = fetchProposal;
-
-	  // DRS Guardian Council 
-// ---------- Bind Buttons ----------
-$('proposeDaoBtn').onclick = proposeDao;
-$('commitDaoBtn').onclick = commitDao;
-$('proposeActiveBatchBtn').onclick = proposeActiveBatch;
-$('commitActiveBatchBtn').onclick = commitActiveBatch;
-$('proposeStandbyBatchBtn').onclick = proposeStandbyBatch;
-$('commitStandbyBatchBtn').onclick = commitStandbyBatch;
-$('activateStandbyBtn').onclick = activateStandby;
-$('clearLockBtn').onclick = clearLock;
-
-$('proposeRecoveryBtn').onclick = proposeRecovery;
-$('approveRecoveryBtn').onclick = approveRecovery;
-$('executeRecoveryBtn').onclick = executeRecovery;
-$('vetoRecoveryBtn').onclick = vetoRecovery;
-  
-$('encodeCallDataBtn').onclick = encodeCallData;
-
-// Manual refresh button
-// -------------------- BUTTON BINDINGS --------------------
-$('refreshDaoBtn').onclick = fetchDaoInfo;
-$('refreshGuardiansBtn').onclick = fetchGuardians;
-$('refreshLockBtn').onclick = fetchLockStatus;
-$('refreshRecoveryBtn').onclick = fetchFullRecoveryState;
 	  
     log('UI ready');
   });
