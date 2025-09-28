@@ -19,6 +19,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -26,6 +27,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 contract CataERC20Upgradeable is
     Initializable,
     ERC20Upgradeable,
+AccessControlEnumerableUpgradeable,
     AccessControlUpgradeable,
     PausableUpgradeable,
     UUPSUpgradeable
@@ -91,6 +93,18 @@ contract CataERC20Upgradeable is
         // Initial allocation (configurable if desired)
         _mint(initialAdmin, 100_000_000 * 1e18);
         emit TokensMinted(initialAdmin, 100_000_000 * 1e18, totalSupply());
+    }
+
+// View Functions (NEW)
+    // -------------------------
+    
+    /// @notice Returns the current admin address.
+    /// @dev This assumes only one active DEFAULT_ADMIN_ROLE is maintained via swapAdmin.
+    function getAdmin() external view returns (address) {
+        uint256 count = getRoleMemberCount(DEFAULT_ADMIN_ROLE);
+        require(count > 0, "CATA: no admin set");
+        // Return the first (and only) admin
+        return getRoleMember(DEFAULT_ADMIN_ROLE, 0);
     }
 
     // -------------------------
