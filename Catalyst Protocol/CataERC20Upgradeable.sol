@@ -93,17 +93,6 @@ AccessControlUpgradeable,
         emit TokensMinted(initialAdmin, 100_000_000 * 1e18, totalSupply());
     }
 
-// View Functions (NEW)
-    // -------------------------
-    
-    /// @notice Returns the current admin address.
-    /// @dev This assumes only one active DEFAULT_ADMIN_ROLE is maintained via swapAdmin.
-    function getAdmin() external view returns (address) {
-        uint256 count = getRoleMemberCount(DEFAULT_ADMIN_ROLE);
-        require(count > 0, "CATA: no admin set");
-        // Return the first (and only) admin
-        return getRoleMember(DEFAULT_ADMIN_ROLE, 0);
-    }
 
     // -------------------------
     // Mint & Burn (Recyclable Supply)
