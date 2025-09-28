@@ -27,8 +27,8 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 contract CataERC20Upgradeable is
     Initializable,
     ERC20Upgradeable,
-AccessControlEnumerableUpgradeable,
     AccessControlUpgradeable,
+AccessControlEnumerableUpgradeable,
     PausableUpgradeable,
     UUPSUpgradeable
 {
