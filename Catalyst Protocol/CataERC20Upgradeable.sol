@@ -28,8 +28,8 @@ contract CataERC20Upgradeable is
     Initializable,
     ERC20Upgradeable,
     AccessControlUpgradeable,
-AccessControlEnumerableUpgradeable,
     PausableUpgradeable,
+AccessControlEnumerableUpgradeable,
     UUPSUpgradeable
 {
     // -------------------------
