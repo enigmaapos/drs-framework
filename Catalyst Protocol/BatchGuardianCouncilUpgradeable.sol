@@ -432,6 +432,18 @@ function _getRecoveryState(RecovKind kind) internal view returns (RecoveryReques
     return _recoveryRequests[kind];
 }
 
+function getLastHonestGuardian() external view returns (address) {
+    return tempVeto.guardian;
+}
+
+function getLastHonestExpiry() external view returns (uint256) {
+    return tempVeto.expiry;
+}
+
+function getWarningFlag() external view returns (bool) {
+    return warning;
+}
+
 // External tuple getter (you already have this)
 function getRecoveryState(RecovKind kind)
     external
