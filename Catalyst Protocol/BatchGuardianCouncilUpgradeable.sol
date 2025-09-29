@@ -448,6 +448,30 @@ function getPendingDAOState()
     return (_pendingDAO, _daoCommitEarliest, _daoCommitDeadline);
 }
 
+function getRecoveryProposed(uint8 kind) external view returns (address) {
+    return recoveryState[kind].proposed;
+}
+
+function getRecoveryApprovals(uint8 kind) external view returns (uint8) {
+    return recoveryState[kind].approvals;
+}
+
+function getRecoveryDeadline(uint8 kind) external view returns (uint256) {
+    return recoveryState[kind].deadline;
+}
+
+function getRecoveryExecuted(uint8 kind) external view returns (bool) {
+    return recoveryState[kind].executed;
+}
+
+function getRecoveryCallTarget(uint8 kind) external view returns (address) {
+    return recoveryState[kind].callTarget;
+}
+
+function getRecoveryCallData(uint8 kind) external view returns (bytes memory) {
+    return recoveryState[kind].callData;
+}
+
 function getPendingActiveBatchState()
     external
     view
