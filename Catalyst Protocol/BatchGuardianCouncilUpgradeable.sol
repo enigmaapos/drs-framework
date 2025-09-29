@@ -449,27 +449,33 @@ function getPendingDAOState()
 }
 
 function getRecoveryProposed(uint8 kind) external view returns (address) {
-    return recoveryState[kind].proposed;
+    (address proposed,, , , ,) = getRecoveryState(RecovKind(kind));
+    return proposed;
 }
 
 function getRecoveryApprovals(uint8 kind) external view returns (uint8) {
-    return recoveryState[kind].approvals;
+    (,uint8 approvals,, , ,) = getRecoveryState(RecovKind(kind));
+    return approvals;
 }
 
 function getRecoveryDeadline(uint8 kind) external view returns (uint256) {
-    return recoveryState[kind].deadline;
+    (,,uint256 deadline,, ,) = getRecoveryState(RecovKind(kind));
+    return deadline;
 }
 
 function getRecoveryExecuted(uint8 kind) external view returns (bool) {
-    return recoveryState[kind].executed;
+    (,,,bool executed,,) = getRecoveryState(RecovKind(kind));
+    return executed;
 }
 
 function getRecoveryCallTarget(uint8 kind) external view returns (address) {
-    return recoveryState[kind].callTarget;
+    (,,,,address callTarget,) = getRecoveryState(RecovKind(kind));
+    return callTarget;
 }
 
 function getRecoveryCallData(uint8 kind) external view returns (bytes memory) {
-    return recoveryState[kind].callData;
+    (,,,,,bytes memory callData) = getRecoveryState(RecovKind(kind));
+    return callData;
 }
 
 function getPendingActiveBatchState()
