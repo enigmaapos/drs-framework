@@ -427,18 +427,52 @@ contract BatchGuardianCouncilUpgradeable is
         return standbyGuardians;
     }
 
-    function getRecoveryState(RecovKind kind)
-        external
-        view
-        returns (address proposed, uint8 approvals, uint256 deadline, bool executed, address callTarget, bytes memory callData)
-    {
-        RecoveryRequest storage R = _recoveryRequests[kind];
-        return (R.proposed, R.approvals, R.deadline, R.executed, R.callTarget, R.callData);
-    }
+    // Internal helper
+function _getRecoveryState(RecovKind kind) internal view returns (RecoveryRequest storage) {
+    return _recoveryRequests[kind];
+}
 
-    function getTempVeto() external view returns (address guardian, uint256 expiry) {
-        return (tempVeto.guardian, tempVeto.expiry);
-    }
+// External tuple getter (you already have this)
+function getRecoveryState(RecovKind kind)
+    external
+    view
+    returns (
+        address proposed,
+        uint8 approvals,
+        uint256 deadline,
+        bool executed,
+        address callTarget,
+        bytes memory callData
+    )
+{
+    RecoveryRequest storage R = _getRecoveryState(kind);
+    return (R.proposed, R.approvals, R.deadline, R.executed, R.callTarget, R.callData);
+}
+
+// Individual getters
+function getRecoveryProposed(RecovKind kind) external view returns (address) {
+    return _getRecoveryState(kind).proposed;
+}
+
+function getRecoveryApprovals(RecovKind kind) external view returns (uint8) {
+    return _getRecoveryState(kind).approvals;
+}
+
+function getRecoveryDeadline(RecovKind kind) external view returns (uint256) {
+    return _getRecoveryState(kind).deadline;
+}
+
+function getRecoveryExecuted(RecovKind kind) external view returns (bool) {
+    return _getRecoveryState(kind).executed;
+}
+
+function getRecoveryCallTarget(RecovKind kind) external view returns (address) {
+    return _getRecoveryState(kind).callTarget;
+}
+
+function getRecoveryCallData(RecovKind kind) external view returns (bytes memory) {
+    return _getRecoveryState(kind).callData;
+}
 
 function getPendingDAOState()
     external
@@ -446,36 +480,6 @@ function getPendingDAOState()
     returns (address pendingDAO, uint256 commitEarliest, uint256 commitDeadline)
 {
     return (_pendingDAO, _daoCommitEarliest, _daoCommitDeadline);
-}
-
-function getRecoveryProposed(uint8 kind) external view returns (address) {
-    (address proposed,, , , ,) = getRecoveryState(RecovKind(kind));
-    return proposed;
-}
-
-function getRecoveryApprovals(uint8 kind) external view returns (uint8) {
-    (,uint8 approvals,, , ,) = getRecoveryState(RecovKind(kind));
-    return approvals;
-}
-
-function getRecoveryDeadline(uint8 kind) external view returns (uint256) {
-    (,,uint256 deadline,, ,) = getRecoveryState(RecovKind(kind));
-    return deadline;
-}
-
-function getRecoveryExecuted(uint8 kind) external view returns (bool) {
-    (,,,bool executed,,) = getRecoveryState(RecovKind(kind));
-    return executed;
-}
-
-function getRecoveryCallTarget(uint8 kind) external view returns (address) {
-    (,,,,address callTarget,) = getRecoveryState(RecovKind(kind));
-    return callTarget;
-}
-
-function getRecoveryCallData(uint8 kind) external view returns (bytes memory) {
-    (,,,,,bytes memory callData) = getRecoveryState(RecovKind(kind));
-    return callData;
 }
 
 function getPendingActiveBatchState()
