@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /*
-  BatchGuardianCouncilUpgradeable
+  BatchGuardianCouncilUpgradeable (Admin-only recovery track)
   - UUPS upgradeable
   - Two batches (active, standby) of fixed GUARDIAN_COUNT (7)
   - DAO-managed reseed/rotate (two-step: propose -> commit window)
@@ -60,9 +60,7 @@ contract BatchGuardianCouncilUpgradeable is
     bool public locked;
     bool public warning;
 
-    // -------- Recovery --------
-    enum RecovKind { DEPLOYER, ADMIN }
-
+    // -------- Recovery (Admin-only) --------
     struct RecoveryRequest {
         address proposed;
         uint8 approvals;
@@ -70,11 +68,11 @@ contract BatchGuardianCouncilUpgradeable is
         bool executed;
         address callTarget;
         bytes callData;
-        // removed nested mapping(hasApproved) in favor of nonce-based approach
     }
 
-    // Using a mapping for robustness
-    mapping(RecovKind => RecoveryRequest) private _recoveryRequests;
+    RecoveryRequest private _adminRecovery;
+    uint256 private _adminRequestNonce;
+    mapping(address => uint256) private _lastApprovedNonceAdmin;
 
     // -------- Last-Honest Veto --------
     struct TempVeto {
@@ -83,27 +81,26 @@ contract BatchGuardianCouncilUpgradeable is
     }
     TempVeto public tempVeto;
 
-    // -------- Nonces (nonce-based approval tracking) --------
-    mapping(RecovKind => uint256) private _requestNonce;
-    mapping(RecovKind => mapping(address => uint256)) private _lastApprovedNonce;
-
     // -------- Events --------
     event DaoChangeProposed(address indexed proposer, address indexed newDao);
     event DaoChanged(address indexed oldDao, address indexed newDao);
+
     event ActiveBatchSeeded(address[GUARDIAN_COUNT] guardians);
     event ActiveBatchProposed(address[GUARDIAN_COUNT] guardians);
     event StandbyBatchSeeded(address[GUARDIAN_COUNT] guardians);
     event StandbyBatchProposed(address[GUARDIAN_COUNT] guardians);
     event StandbyActivated(address[GUARDIAN_COUNT] newActive);
-    event WarningRaised(RecovKind kind, uint8 approvals);
-    event AutoLocked(RecovKind kind);
-    event RecoveryProposed(RecovKind kind, address indexed proposer, address proposed, address callTarget, uint256 deadline);
-    event RecoveryApproved(RecovKind kind, address indexed guardian, uint8 approvals);
-    event RecoveryExecuted(RecovKind kind, address indexed proposed, address callTarget);
-    event RecoveryFailed(RecovKind kind, address indexed proposer, address callTarget, bytes returnData);
+
+    // Recovery flow events (Admin-only, no kind arg)
+    event WarningRaised(uint8 approvals);
+    event AutoLocked();
+    event RecoveryProposed(address indexed proposer, address proposed, address callTarget, uint256 deadline);
+    event RecoveryApproved(address indexed guardian, uint8 approvals);
+    event RecoveryExecuted(address indexed proposed, address callTarget);
+    event RecoveryFailed(address indexed proposer, address callTarget, bytes returnData);
     event LastHonestAssigned(address indexed guardian, uint256 expiry);
-    event LastHonestHalted(address indexed guardian, RecovKind kind);
-    event RecoveryReset(RecovKind kind, uint256 newNonce);
+    event LastHonestHalted(address indexed guardian);
+    event RecoveryReset(uint256 newNonce);
 
     // -------- Errors --------
     error Unauthorized();
@@ -167,6 +164,10 @@ contract BatchGuardianCouncilUpgradeable is
         warning = false;
         tempVeto.guardian = address(0);
         tempVeto.expiry = 0;
+
+        // initialize admin recovery to zero (delete semantics)
+        delete _adminRecovery;
+        _adminRequestNonce = 0;
     }
 
     function _authorizeUpgrade(address) internal override onlyDAO {}
@@ -269,21 +270,21 @@ contract BatchGuardianCouncilUpgradeable is
         _unpause();
     }
 
-    // -------- Recovery Proposals --------
+    // -------- Recovery Proposals (Admin-only) --------
     function proposeRecovery(
-        RecovKind kind,
         address proposed,
         address callTarget,
         bytes calldata callData
     ) external notLocked onlyActiveG whenNotPaused {
         if (callTarget == address(0)) revert InvalidCallTarget();
         if (callData.length == 0) revert InvalidCallData();
+        if (proposed == address(0)) revert ZeroAddress();
 
         // increment nonce to invalidate previous approvals
-        _requestNonce[kind] += 1;
-        uint256 nonce = _requestNonce[kind];
+        _adminRequestNonce += 1;
+        uint256 nonce = _adminRequestNonce;
 
-        RecoveryRequest storage R = _recoveryRequests[kind];
+        RecoveryRequest storage R = _adminRecovery;
         R.proposed = proposed;
         R.approvals = 1; // proposer auto-approves
         R.deadline = block.timestamp + RECOVERY_WINDOW;
@@ -291,22 +292,22 @@ contract BatchGuardianCouncilUpgradeable is
         R.callTarget = callTarget;
         R.callData = callData;
 
-        _lastApprovedNonce[kind][msg.sender] = nonce;
+        _lastApprovedNonceAdmin[msg.sender] = nonce;
 
-        emit RecoveryProposed(kind, msg.sender, proposed, callTarget, R.deadline);
-        emit RecoveryApproved(kind, msg.sender, R.approvals);
+        emit RecoveryProposed(msg.sender, proposed, callTarget, R.deadline);
+        emit RecoveryApproved(msg.sender, R.approvals);
     }
 
-    function approveRecovery(RecovKind kind) external notLocked onlyActiveG whenNotPaused {
-        RecoveryRequest storage R = _recoveryRequests[kind];
+    function approveRecovery() external notLocked onlyActiveG whenNotPaused {
+        RecoveryRequest storage R = _adminRecovery;
         if (R.callTarget == address(0)) revert NoActiveRequest();
         if (R.executed) revert AlreadyExecuted();
         if (block.timestamp > R.deadline) revert RequestExpired();
 
-        uint256 nonce = _requestNonce[kind];
-        if (_lastApprovedNonce[kind][msg.sender] == nonce) revert AlreadyApproved();
+        uint256 nonce = _adminRequestNonce;
+        if (_lastApprovedNonceAdmin[msg.sender] == nonce) revert AlreadyApproved();
 
-        _lastApprovedNonce[kind][msg.sender] = nonce;
+        _lastApprovedNonceAdmin[msg.sender] = nonce;
         R.approvals += 1;
 
         address last = address(0);
@@ -314,7 +315,7 @@ contract BatchGuardianCouncilUpgradeable is
             // find missing guardian to assign last-honest
             for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
                 address g = activeGuardians[i];
-                if (_lastApprovedNonce[kind][g] != nonce) {
+                if (_lastApprovedNonceAdmin[g] != nonce) {
                     last = g;
                     break;
                 }
@@ -323,7 +324,7 @@ contract BatchGuardianCouncilUpgradeable is
                 tempVeto.guardian = last;
                 tempVeto.expiry = block.timestamp + LAST_HONEST_VETO_WINDOW;
                 warning = true;
-                emit WarningRaised(kind, R.approvals);
+                emit WarningRaised(R.approvals);
                 emit LastHonestAssigned(last, tempVeto.expiry);
             }
         }
@@ -332,24 +333,25 @@ contract BatchGuardianCouncilUpgradeable is
         if (R.approvals >= GUARDIAN_COUNT) {
             // lock and auto-activate standby per spec
             locked = true;
-            emit AutoLocked(kind);
+            emit AutoLocked();
             // clear request before activating standby to avoid dangling request state
-            delete _recoveryRequests[kind];
+            // emit a RecoveryReset after bumping nonce below
+            delete _adminRecovery;
             tempVeto.guardian = address(0);
             tempVeto.expiry = 0;
             // activate standby; will clear standby array into active
             _activateStandby();
             // increment nonce to avoid re-approvals on the deleted request
-            _requestNonce[kind] += 1;
-            emit RecoveryReset(kind, _requestNonce[kind]);
+            _adminRequestNonce += 1;
+            emit RecoveryReset(_adminRequestNonce);
             return;
         }
 
-        emit RecoveryApproved(kind, msg.sender, R.approvals);
+        emit RecoveryApproved(msg.sender, R.approvals);
     }
 
-    function executeRecovery(RecovKind kind) external nonReentrant whenNotPaused {
-        RecoveryRequest storage R = _recoveryRequests[kind];
+    function executeRecovery() external nonReentrant whenNotPaused {
+        RecoveryRequest storage R = _adminRecovery;
 
         if (R.callTarget == address(0)) revert NoActiveRequest();
         if (R.executed) revert AlreadyExecuted();
@@ -358,42 +360,35 @@ contract BatchGuardianCouncilUpgradeable is
 
         // Effects
         R.executed = true;
-        // clear veto
         tempVeto.guardian = address(0);
         tempVeto.expiry = 0;
 
-        // Interactions: low-level call and bubble revert reasons if any
+        // Interaction
         (bool ok, bytes memory ret) = R.callTarget.call(R.callData);
         if (!ok) {
-            emit RecoveryFailed(kind, R.proposed, R.callTarget, ret);
-            // bubble revert reason:
-            assembly {
-                let returndata_size := mload(ret)
-                revert(add(ret, 32), returndata_size)
-            }
+            // revert with custom error including returned bytes
+            revert CallFailed(ret);
         }
 
-        // Success: clear the request to avoid stale state
-        emit RecoveryExecuted(kind, R.proposed, R.callTarget);
-        delete _recoveryRequests[kind];
-        // bump nonce to invalidate previous approvals (safety)
-        _requestNonce[kind] += 1;
-        emit RecoveryReset(kind, _requestNonce[kind]);
+        emit RecoveryExecuted(R.proposed, R.callTarget);
+        delete _adminRecovery;
+        _adminRequestNonce += 1;
+        emit RecoveryReset(_adminRequestNonce);
     }
 
-    function lastHonestHaltAndPromote(RecovKind kind) external whenNotPaused onlyActiveG {
+    function lastHonestHaltAndPromote() external whenNotPaused onlyActiveG {
         if (tempVeto.guardian == address(0)) revert NoActiveRequest();
         if (msg.sender != tempVeto.guardian) revert NotLastHonest();
         if (block.timestamp > tempVeto.expiry) revert VetoExpired();
 
-        RecoveryRequest storage R = _recoveryRequests[kind];
+        RecoveryRequest storage R = _adminRecovery;
         if (R.callTarget == address(0)) revert NoActiveRequest();
         if (R.executed) revert AlreadyExecuted();
         if (block.timestamp > R.deadline) revert RequestExpired();
         if (R.approvals != GUARDIAN_COUNT - 1) revert ThresholdNotMet();
 
         // Resetting the request
-        delete _recoveryRequests[kind];
+        delete _adminRecovery;
 
         tempVeto.guardian = address(0);
         tempVeto.expiry = 0;
@@ -401,10 +396,10 @@ contract BatchGuardianCouncilUpgradeable is
         // Promote standby to active
         _activateStandby();
         warning = false; // clear warning after this action
-        emit LastHonestHalted(msg.sender, kind);
+        emit LastHonestHalted(msg.sender);
         // bump nonce to prevent reuse
-        _requestNonce[kind] += 1;
-        emit RecoveryReset(kind, _requestNonce[kind]);
+        _adminRequestNonce += 1;
+        emit RecoveryReset(_adminRequestNonce);
     }
 
     // Only DAO may activate standby if locked (explicit healing path)
@@ -427,109 +422,93 @@ contract BatchGuardianCouncilUpgradeable is
         return standbyGuardians;
     }
 
-    // Internal helper
-function _getRecoveryState(RecovKind kind) internal view returns (RecoveryRequest storage) {
-    return _recoveryRequests[kind];
-}
-
-function getLastHonestGuardian() external view returns (address) {
-    return tempVeto.guardian;
-}
-
-function getLastHonestExpiry() external view returns (uint256) {
-    return tempVeto.expiry;
-}
-
-function getWarningFlag() external view returns (bool) {
-    return warning;
-}
-
-// External tuple getter (you already have this)
-function getRecoveryState(RecovKind kind)
-    external
-    view
-    returns (
-        address proposed,
-        uint8 approvals,
-        uint256 deadline,
-        bool executed,
-        address callTarget,
-        bytes memory callData
-    )
-{
-    RecoveryRequest storage R = _getRecoveryState(kind);
-    return (R.proposed, R.approvals, R.deadline, R.executed, R.callTarget, R.callData);
-}
-
-// Individual getters
-function getRecoveryProposed(RecovKind kind) external view returns (address) {
-    return _getRecoveryState(kind).proposed;
-}
-
-function getRecoveryApprovals(RecovKind kind) external view returns (uint8) {
-    return _getRecoveryState(kind).approvals;
-}
-
-function getRecoveryDeadline(RecovKind kind) external view returns (uint256) {
-    return _getRecoveryState(kind).deadline;
-}
-
-function getRecoveryExecuted(RecovKind kind) external view returns (bool) {
-    return _getRecoveryState(kind).executed;
-}
-
-function getRecoveryCallTarget(RecovKind kind) external view returns (address) {
-    return _getRecoveryState(kind).callTarget;
-}
-
-function getRecoveryCallData(RecovKind kind) external view returns (bytes memory) {
-    return _getRecoveryState(kind).callData;
-}
-
-function getPendingDAOState()
-    external
-    view
-    returns (address pendingDAO, uint256 commitEarliest, uint256 commitDeadline)
-{
-    return (_pendingDAO, _daoCommitEarliest, _daoCommitDeadline);
-}
-
-function getPendingActiveBatchState()
-    external
-    view
-    returns (address[GUARDIAN_COUNT] memory pendingBatch, uint256 commitEarliest, uint256 commitDeadline)
-{
-    return (_pendingActiveBatch, _activeBatchCommitEarliest, _activeBatchCommitDeadline);
-}
-
-function getPendingStandbyBatchState()
-    external
-    view
-    returns (address[GUARDIAN_COUNT] memory pendingBatch, uint256 commitEarliest, uint256 commitDeadline)
-{
-    return (_pendingStandbyBatch, _standbyBatchCommitEarliest, _standbyBatchCommitDeadline);
-}
-
-function getRequestNonce(RecovKind kind) external view returns (uint256) {
-    return _requestNonce[kind];
-}
-
-function hasApproved(RecovKind kind, address guardian) external view returns (bool) {
-    return _lastApprovedNonce[kind][guardian] == _requestNonce[kind];
-}
-
-    // -------- Internals --------
-    function _resetReq(RecoveryRequest storage R, address proposed) internal {
-        R.proposed = proposed;
-        R.approvals = 0;
-        R.deadline = block.timestamp + RECOVERY_WINDOW;
-        R.executed = false;
-        R.callTarget = address(0);
-        R.callData = "";
-        tempVeto.guardian = address(0);
-        tempVeto.expiry = 0;
+    function getLastHonestGuardian() external view returns (address) {
+        return tempVeto.guardian;
     }
 
+    function getLastHonestExpiry() external view returns (uint256) {
+        return tempVeto.expiry;
+    }
+
+    function getWarningFlag() external view returns (bool) {
+        return warning;
+    }
+
+    // External tuple getter for the admin recovery
+    function getRecoveryState()
+        external
+        view
+        returns (
+            address proposed,
+            uint8 approvals,
+            uint256 deadline,
+            bool executed,
+            address callTarget,
+            bytes memory callData
+        )
+    {
+        RecoveryRequest storage R = _adminRecovery;
+        return (R.proposed, R.approvals, R.deadline, R.executed, R.callTarget, R.callData);
+    }
+
+    // Individual getters
+    function getRecoveryProposed() external view returns (address) {
+        return _adminRecovery.proposed;
+    }
+
+    function getRecoveryApprovals() external view returns (uint8) {
+        return _adminRecovery.approvals;
+    }
+
+    function getRecoveryDeadline() external view returns (uint256) {
+        return _adminRecovery.deadline;
+    }
+
+    function getRecoveryExecuted() external view returns (bool) {
+        return _adminRecovery.executed;
+    }
+
+    function getRecoveryCallTarget() external view returns (address) {
+        return _adminRecovery.callTarget;
+    }
+
+    function getRecoveryCallData() external view returns (bytes memory) {
+        return _adminRecovery.callData;
+    }
+
+    function getPendingDAOState()
+        external
+        view
+        returns (address pendingDAO, uint256 commitEarliest, uint256 commitDeadline)
+    {
+        return (_pendingDAO, _daoCommitEarliest, _daoCommitDeadline);
+    }
+
+    function getPendingActiveBatchState()
+        external
+        view
+        returns (address[GUARDIAN_COUNT] memory pendingBatch, uint256 commitEarliest, uint256 commitDeadline)
+    {
+        return (_pendingActiveBatch, _activeBatchCommitEarliest, _activeBatchCommitDeadline);
+    }
+
+    function getPendingStandbyBatchState()
+        external
+        view
+        returns (address[GUARDIAN_COUNT] memory pendingBatch, uint256 commitEarliest, uint256 commitDeadline)
+    {
+        return (_pendingStandbyBatch, _standbyBatchCommitEarliest, _standbyBatchCommitDeadline);
+    }
+
+    function getAdminRequestNonce() external view returns (uint256) {
+        return _adminRequestNonce;
+    }
+
+    function hasApproved(address guardian) external view returns (bool) {
+        return _lastApprovedNonceAdmin[guardian] == _adminRequestNonce;
+    }
+
+    // -------- Internals --------
     function _seedActiveBatch(address[GUARDIAN_COUNT] memory batch) internal {
         _ensureNoDuplicates(batch);
         _ensureNoOverlapWithStandby(batch);
@@ -577,7 +556,7 @@ function hasApproved(RecovKind kind, address guardian) external view returns (bo
         _clearActive();
         for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
             address g = standbyGuardians[i];
-            require(g != address(0), "standby not seeded");
+            if (g == address(0)) revert ZeroAddress(); // standby must be seeded
             activeGuardians[i] = g;
             isActiveGuardian[g] = true;
             isStandbyGuardian[g] = false;
@@ -587,8 +566,8 @@ function hasApproved(RecovKind kind, address guardian) external view returns (bo
     }
 
     // Validate batch param not zero and duplicates check
-    function _validateBatchArray(address[GUARDIAN_COUNT] calldata batch) internal pure {
-        // array length is guaranteed by type; leave placeholder in case future dynamic arrays used
+    function _validateBatchArray(address[GUARDIAN_COUNT] calldata /*batch*/) internal pure {
+        // array length is guaranteed by type; placeholder for future dynamic-array use
     }
 
     function _ensureNoDuplicates(address[GUARDIAN_COUNT] memory batch) internal pure {
