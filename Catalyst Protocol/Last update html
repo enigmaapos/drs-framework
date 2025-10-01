@@ -1,7 +1,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Catalyst Protocol — DApp (Production-ready UI)</title>
+  <title>Catalyst Protocol — DApp</title>
 	  <script src="https://cdn.tailwindcss.com"></script>
   <meta name="description" content="Catalyst Protocol dApp — staking, governance, council" />
 	<link rel="icon" type="image/png" href="assets/logo.png">	
@@ -12,17 +12,29 @@
 .tabbtn:hover {opacity: 0.85; transform: translateY(-1px);}
 .tab-active {outline: 2px solid white; outline-offset: 2px;}
 
-  /* Center it on the screen */
-  #loadingIndicator {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 9999;
+/* Center it on the screen (FIXED FOR SCROLLING) */
+#loadingIndicator {
+    /* 1. Anchors the element to the browser window, not the document */
+    position: fixed; 
+    
+    /* 2. Forces the element to stretch across the entire viewport */
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    
+    /* 3. Puts it above everything else */
+    z-index: 9999; 
+    
+    /* 4. Centers the content (spinner/text) inside the full-screen container */
     display: flex;
     flex-direction: column;
-    align-items: center;
-  }
+    justify-content: center; /* Centers content vertically */
+    align-items: center;    /* Centers content horizontally */
+    
+    /* Recommended: Add a dim background to block interaction */
+    background: rgba(0, 0, 0, 0.7); 
+}
 
   /* Spinner circle */
   .spinner {
@@ -48,6 +60,13 @@
   }
   </style>
 </head>
+
+<!-- Loading Indicator -->
+<div id="loadingIndicator" style="display:none;">
+  <div class="spinner"></div>
+  <div class="loading-text">Loading...</div>
+</div> 
+
 <body class="min-h-screen text-white font-sans">
   <div class="max-w-6xl mx-auto p-6">
     <header class="flex items-center justify-between mb-6">
@@ -139,12 +158,6 @@
 
   <!-- Tab Contents -->
   <div id="tabContents" class="glass rounded-2xl p-4">
-
-	   <!-- Loading Indicator -->
-<div id="loadingIndicator" style="display:none;">
-  <div class="spinner"></div>
-  <div class="loading-text">Loading...</div>
-</div> 
 
 <section>
   <div id="overview" class="tab-content">
@@ -311,7 +324,6 @@
 	<div class="p-4 rounded-xl bg-slate-800 text-slate-200 space-y-4">
   <div class="text-lg font-bold text-slate-100">⚡ CATA Actions</div>
 
-  <!-- Burn -->
   <div>
     <input id="cataBurnAmt" placeholder="Amount to burn" class="w-full p-2 rounded bg-black/20 text-sm" />
     <button id="cataBurnBtn" class="mt-2 w-full p-2 bg-red-600 hover:bg-red-500 rounded">
@@ -319,9 +331,8 @@
     </button>
   </div>
 
-  <!-- Admin-only: Pause/Unpause -->
   <div class="pt-4 border-t border-slate-700">
-    <div class="text-xs text-slate-400 mb-1">Admin Controls</div>
+    <div class="text-xs text-slate-400 mb-1">Admin Controls (Requires DEFAULT_ADMIN_ROLE)</div>
     <div class="flex gap-2">
       <button id="pauseBtn" class="flex-1 p-2 bg-yellow-600 hover:bg-yellow-500 rounded">
         ⏸ Pause
@@ -332,9 +343,32 @@
     </div>
   </div>
 
-  <!-- Council-only: Swap Admin -->
   <div class="pt-4 border-t border-slate-700">
-    <div class="text-xs text-slate-400 mb-1">Council Actions</div>
+    <div class="text-xs text-slate-400 mb-1">Change Council (Requires DEFAULT_ADMIN_ROLE)</div>
+    <input id="newCouncilAddress" placeholder="New Council contract address" class="w-full p-2 rounded bg-black/20 text-sm" />
+    <button id="grantCouncilRoleBtn" class="mt-2 w-full p-2 bg-purple-600 hover:bg-purple-500 rounded">
+      🔄 Grant COUNCIL_ROLE
+    </button>
+  </div>
+
+  <div class="pt-4 border-t border-slate-700">
+    <div class="text-xs text-slate-400 mb-1">Manage Minter Role (Requires DEFAULT_ADMIN_ROLE)</div>
+    <input id="newMinterAddress" placeholder="Address to grant MINTER_ROLE" class="w-full p-2 rounded bg-black/20 text-sm" />
+    <button id="grantMinterRoleBtn" class="mt-2 w-full p-2 bg-pink-600 hover:bg-pink-500 rounded">
+      ➕ Grant MINTER_ROLE
+    </button>
+  </div>
+
+		<div class="pt-4 border-t border-slate-700">
+    <div class="text-xs text-slate-400 mb-1">Revoke Minter Role (Requires DEFAULT_ADMIN_ROLE)</div>
+    <input id="revokeMinterAddress" placeholder="Minter address to revoke" class="w-full p-2 rounded bg-black/20 text-sm" />
+    <button id="revokeMinterRoleBtn" class="mt-2 w-full p-2 bg-red-600 hover:bg-red-500 rounded">
+      ➖ Revoke MINTER_ROLE
+    </button>
+		</div>
+  
+  <div class="pt-4 border-t border-slate-700">
+    <div class="text-xs text-slate-400 mb-1">Council Actions (Requires onlyCouncil)</div>
     <div class="flex gap-2">
       <input id="swapNewAdmin" placeholder="New admin address" class="flex-1 p-2 rounded bg-black/20 text-sm" />
       <input id="swapOldAdmin" placeholder="Old admin address (optional)" class="flex-1 p-2 rounded bg-black/20 text-sm" />
@@ -343,11 +377,25 @@
       🔑 Swap Admin
     </button>
   </div>
+	</div>
 
-  <!-- Transparency -->
   <div class="pt-4 border-t border-slate-700">
-    <div class="text-xs text-slate-400 mb-1">Transparency</div>
+    <div class="text-xs text-slate-400 mb-1">Transparency & Key Roles</div>
     <div class="flex flex-col gap-1">
+      
+      <div class="p-2 rounded bg-black/20 text-sm">
+        CATA Admin: <span id="cataAdminAddress" class="font-mono text-purple-400 break-all">…</span>
+      </div>
+      
+      <div class="p-2 rounded bg-black/20 text-sm">
+        CATA Council: <span id="cataCouncilAddress" class="font-mono text-cyan-400 break-all">…</span>
+      </div>
+
+		<div class="p-2 rounded bg-black/20 text-sm">  
+  CATA Minters:  
+  <div id="cataMinters" class="font-mono text-pink-400 break-all whitespace-pre-wrap">…</div>  
+</div>
+
       <div class="p-2 rounded bg-black/20 text-sm">
         Remaining Mintable: <span id="cataRemainingMintable" class="font-mono text-green-400">…</span>
       </div>
@@ -362,7 +410,7 @@
       🔍 Refresh Transparency
     </button>
   </div>
-</div>
+	</div>
 </section>
 
     <!-- Collection Registration -->
@@ -752,88 +800,180 @@
     </div>
     <button id="activateStandbyBtn" class="w-full p-2 bg-green-600 rounded mt-2">Activate Standby</button>
   </div>
-
+	
   <hr class="border-slate-700 my-2" />
+
+  <!-- Recovery -->
+<div class="max-w-xl mx-auto p-4 space-y-4">
+    <h1 class="text-2xl font-bold mb-4">BatchGuardianCouncil Console</h1>
+
+<h2 class="text-xl font-semibold mb-2">1. New Recovery Request (Admin Only)</h2>
+
+        <h3 class="text-sm font-semibold mb-1">Request Parameters</h3>
+            
+            <select id="recoveryFunctionSelect" class="w-full p-2 rounded bg-black/20">
+                <option value="" disabled selected>-- Select Admin Function --</option>
+                <option value="swapAdmin(address,address)">swapAdmin(address,address)</option>
+                <option value="changeAdmin(address)">changeAdmin(address)</option>
+                <option value="pause()">pause()</option>
+                <option value="unpause()">unpause()</option>
+            </select>
+
+            <input id="inputRecoveryProposed" placeholder="Proposed address (e.g., new Admin)" class="w-full p-2 rounded bg-black/20" />
+<input id="inputRecoveryCallTarget" placeholder="Target contract address (e.g., CataERC20 Proxy)" class="w-full p-2 rounded bg-black/20" />
+            <input id="recoveryFunction" placeholder="Function Signature (e.g., swapAdmin(address,address))" class="w-full p-2 rounded bg-black/20" />
+            <input id="recoveryArgs" placeholder="Arguments (comma-separated, e.g., 0xNewAdmin, 0xOldAdmin)" class="w-full p-2 rounded bg-black/20" />
+            <textarea id="inputRecoveryCallData" placeholder="Calldata (auto-generated 0x...)" class="w-full p-2 rounded bg-black/20 font-mono h-20" readonly></textarea>
+	
+            <button id="encodeCallDataBtn" class="w-full p-2 bg-blue-600 hover:bg-blue-700 rounded-lg">Encode CallData</button>
+	
+            <div class="flex gap-2 mt-2">
+                <button id="proposeRecoveryBtn" class="flex-1 p-2 bg-red-600 hover:bg-red-700 rounded-lg">Propose</button>
+                <button id="approveRecoveryBtn" class="flex-1 p-2 bg-orange-600 hover:bg-orange-700 rounded-lg">Approve</button>
+                <button id="executeRecoveryBtn" class="flex-1 p-2 bg-green-600 hover:bg-green-700 rounded-lg">Execute</button>
+                <button id="vetoRecoveryBtn" class="flex-1 p-2 bg-slate-600 hover:bg-slate-700 rounded-lg">Veto (Last Honest)</button>
+            </div>
+        </div>
+		
+		  <hr class="border-slate-700 my-2" />
 
   <!-- Lock -->
   <div class="space-y-2 text-sm">
     <button id="clearLockBtn" class="w-full p-2 bg-slate-600 rounded">Clear Lock/Warning</button>
   </div>
+	
+	<hr class="border-slate-700 my-2" />
+	
+	<div class="space-y-6">
 
-  <hr class="border-slate-700 my-2" />
-
-  <!-- Recovery -->
-  <h3 class="text-sm font-semibold mb-1">Recovery Request</h3>
-  <div class="space-y-2 text-sm">
-    <select id="recoveryKind" class="w-full p-2 rounded bg-black/20">
-      <option value="0">Deployer</option>
-      <option value="1">Admin</option>
-    </select>
-    <input id="recoveryProposed" placeholder="Proposed address" class="w-full p-2 rounded bg-black/20" />
-    <input id="recoveryCallTarget" placeholder="Target contract address" class="w-full p-2 rounded bg-black/20" />
-    <input id="recoveryFunction" placeholder="Function (e.g. upgradeTo(address))" class="w-full p-2 rounded bg-black/20" />
-    <input id="recoveryArgs" placeholder="Arguments (comma-separated)" class="w-full p-2 rounded bg-black/20" />
-    <textarea id="recoveryCallData" placeholder="Calldata (auto-generated 0x...)" class="w-full p-2 rounded bg-black/20 font-mono h-20"></textarea>
-    <button id="encodeCallDataBtn" class="w-full p-2 bg-blue-600 rounded">Encode CallData</button>
-    <div class="flex gap-2 mt-2">
-      <button id="proposeRecoveryBtn" class="flex-1 p-2 bg-red-600 rounded">Propose</button>
-      <button id="approveRecoveryBtn" class="flex-1 p-2 bg-orange-600 rounded">Approve</button>
-      <button id="executeRecoveryBtn" class="flex-1 p-2 bg-green-600 rounded">Execute</button>
-      <button id="vetoRecoveryBtn" class="flex-1 p-2 bg-slate-600 rounded">Veto</button>
+  <!-- Recovery State Card -->
+  <div class="bg-gray-800 shadow-lg rounded-2xl p-6 border border-gray-700">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-semibold text-white">Recovery State</h2>
+      <button id="refreshRecoveryBtn"
+        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium shadow-md transition">
+        🔄 Refresh
+      </button>
+    </div>
+    <div id="recoveryStatusBanner"
+         class="hidden mb-4 p-2 rounded-lg text-sm font-medium"></div>
+    <div class="grid grid-cols-2 gap-y-3 text-sm text-gray-300">
+      <div class="text-gray-400">Proposed:</div>
+      <div id="recoveryProposed" class="font-mono text-slate-100 break-all">—</div>
+      <div class="text-gray-400">Approvals:</div>
+      <div id="recoveryApprovals" class="text-slate-100">—</div>
+      <div class="text-gray-400">Deadline:</div>
+      <div id="recoveryDeadline" class="text-slate-100">—</div>
+      <div class="text-gray-400">Executed:</div>
+      <div id="recoveryExecuted" class="text-slate-100">—</div>
+      <div class="text-gray-400">Call Target:</div>
+      <div id="recoveryCallTarget"
+           class="font-mono text-slate-100 truncate max-w-[260px]" title="—">—</div>
+      <div class="text-gray-400">Call Data:</div>
+      <div id="recoveryCallData"
+           class="font-mono text-slate-100 break-all" title="—">—</div>
+      <div class="col-span-2">
+        <div class="text-gray-400">Approved By:</div>
+        <pre id="recoveryApprovedBy"
+             class="font-mono text-slate-100 whitespace-pre-wrap bg-gray-900/50 p-2 rounded-lg h-24 overflow-y-auto">—</pre>
+      </div>
     </div>
   </div>
 
-  <hr class="border-slate-700 my-2" />
-
-  <!-- Read-only DAO + Guardians -->
-  <h3 class="text-base font-semibold mb-2">DAO State</h3>
-  <div class="p-3 rounded-lg bg-slate-800/60 shadow text-sm space-y-3">
-    <div>
-      <div class="text-slate-400 text-xs">Current DAO</div>
-      <div id="daoAddr" class="font-mono text-slate-100 break-all">—</div>
+  <!-- Veto & Warning Card -->
+  <div class="bg-gray-800 shadow-lg rounded-2xl p-6 border border-gray-700">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-semibold text-white">Last Honest Guardian & Warning</h2>
+      <button id="refreshVetoWarningBtn"
+        class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg text-sm font-medium shadow-md transition">
+        🔄 Refresh
+      </button>
     </div>
-    <div>
-      <div class="text-slate-400 text-xs">Pending DAO</div>
-      <div id="pendingDaoAddr" class="font-mono text-slate-100 break-all">—</div>
-    </div>
-    <div>
-      <div class="text-slate-400 text-xs">Commit Window</div>
-      <div id="pendingDaoWindow" class="font-mono text-slate-100">—</div>
-    </div>
-  </div>
-  <button id="refreshDaoBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm">🔄 Refresh DAO</button>
-
-  <h3 class="text-base font-semibold mt-6 mb-2">Guardians</h3>
-  <div class="grid grid-cols-2 gap-3 text-sm">
-    <div class="p-3 rounded-lg bg-slate-800/60 shadow">
-      <div class="text-slate-400 text-xs">Active</div>
-      <pre id="activeGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
-    </div>
-    <div class="p-3 rounded-lg bg-slate-800/60 shadow">
-      <div class="text-slate-400 text-xs">Standby</div>
-      <pre id="standbyGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
-    </div>
-    <div class="col-span-2 p-3 rounded-lg bg-slate-800/60 shadow">
-      <div class="text-slate-400 text-xs">Pending Active Batch</div>
-      <pre id="pendingActiveGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
-      <div class="text-slate-400 text-xs mt-2">Commitment Window</div>
-      <div id="pendingActiveWindow" class="font-mono text-slate-100">—</div>
-    </div>
-    <div class="col-span-2 p-3 rounded-lg bg-slate-800/60 shadow">
-      <div class="text-slate-400 text-xs">Pending Standby Batch</div>
-      <pre id="pendingStandbyGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
-      <div class="text-slate-400 text-xs mt-2">Commitment Window</div>
-      <div id="pendingStandbyWindow" class="font-mono text-slate-100">—</div>
+    <div class="grid grid-cols-2 gap-y-2 text-sm text-gray-300">
+      <div class="text-gray-400">Guardian:</div>
+      <div id="lastHonestGuardian"
+           class="font-mono text-slate-100 truncate max-w-[220px]" title="—">—</div>
+      <div class="text-gray-400">Veto Expiry:</div>
+      <div id="lastHonestExpiry">—</div>
+      <div class="text-gray-400">Warning:</div>
+      <div id="warningFlag">—</div>
     </div>
   </div>
-  <button id="refreshGuardiansBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm">🔄 Refresh Guardians</button>
 
-  <h3 class="text-base font-semibold mt-6 mb-2">Lock Status</h3>
-  <div class="p-3 rounded-lg bg-slate-800/60 shadow text-sm">
-    <div class="text-slate-400 text-xs">Status</div>
-    <div id="lockStatus" class="font-mono text-slate-100">—</div>
+  <!-- DAO State Card -->
+  <div class="bg-gray-800 shadow-lg rounded-2xl p-6 border border-gray-700">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-semibold text-white">DAO State</h2>
+      <button id="refreshDaoBtn"
+        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium shadow-md transition">
+        🔄 Refresh
+      </button>
+    </div>
+    <div class="space-y-3 text-sm text-gray-300">
+      <div>
+        <div class="text-gray-400 text-xs">Current DAO</div>
+        <div id="daoAddr" class="font-mono text-slate-100 break-all">—</div>
+      </div>
+      <div>
+        <div class="text-gray-400 text-xs">Pending DAO</div>
+        <div id="pendingDaoAddr" class="font-mono text-slate-100 break-all">—</div>
+      </div>
+      <div>
+        <div class="text-gray-400 text-xs">Commit Window</div>
+        <div id="pendingDaoWindow" class="font-mono text-slate-100">—</div>
+      </div>
+    </div>
   </div>
-  <button id="refreshLockBtn" class="mt-3 w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm">🔄 Refresh Lock</button>
+
+  <!-- Guardians Card -->
+  <div class="bg-gray-800 shadow-lg rounded-2xl p-6 border border-gray-700">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-semibold text-white">Guardians</h2>
+      <button id="refreshGuardiansBtn"
+        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium shadow-md transition">
+        🔄 Refresh
+      </button>
+    </div>
+    <div class="grid grid-cols-2 gap-4 text-sm">
+      <div class="bg-gray-900/60 p-3 rounded-lg shadow-inner">
+        <div class="text-gray-400 text-xs">Active</div>
+        <pre id="activeGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
+      </div>
+      <div class="bg-gray-900/60 p-3 rounded-lg shadow-inner">
+        <div class="text-gray-400 text-xs">Standby</div>
+        <pre id="standbyGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
+      </div>
+      <div class="col-span-2 bg-gray-900/60 p-3 rounded-lg shadow-inner">
+        <div class="text-gray-400 text-xs">Pending Active Batch</div>
+        <pre id="pendingActiveGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
+        <div class="text-gray-400 text-xs mt-2">Commitment Window</div>
+        <div id="pendingActiveWindow" class="font-mono text-slate-100">—</div>
+      </div>
+      <div class="col-span-2 bg-gray-900/60 p-3 rounded-lg shadow-inner">
+        <div class="text-gray-400 text-xs">Pending Standby Batch</div>
+        <pre id="pendingStandbyGuardians" class="font-mono text-slate-100 whitespace-pre-wrap h-24 overflow-y-auto">—</pre>
+        <div class="text-gray-400 text-xs mt-2">Commitment Window</div>
+        <div id="pendingStandbyWindow" class="font-mono text-slate-100">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lock Status Card -->
+  <div class="bg-gray-800 shadow-lg rounded-2xl p-6 border border-gray-700">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-semibold text-white">Lock Status</h2>
+      <button id="refreshLockBtn"
+        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium shadow-md transition">
+        🔄 Refresh
+      </button>
+    </div>
+    <div class="text-sm text-gray-300">
+      <div class="text-gray-400 text-xs">Status</div>
+      <div id="lockStatus" class="font-mono text-slate-100">—</div>
+    </div>
+  </div>
+
+</div>
 </section>
          
 
@@ -940,12 +1080,13 @@
 
   // Default addresses (replace with your deployed addresses)
   const DEFAULT_ADDRS = {
-    cata: "0x605bb62249E1b16049Ca6E69e70BCFEcD88c3E3D",
+    cata: "0x0417b60dd50371F5248C868d4c3E3ABa765da78f",
     staking: "0xa8Dd5EeEcF6eCc4Ff8A06881125ae95C0f777332",
     governance: "0x11D93F284754af1C543F61D7b04784fC974494A4",
-    council: "0x5C1006247f7759C3f245312f2407AcE3351Db32A"
+    council: "0x78763A38FA8392051acbcc60a26fB1fD51ECC854"
   };
 
+	  
 	  // App state
 	  let provider = null, signer = null, userAddr = null;
   let abis = {}, contracts = { cata:null, staking:null, governance:null, council:null };
@@ -989,25 +1130,50 @@ const $ = id => document.getElementById(id);
   }
 
   function loadSavedAddrs(){
-    try {
-      const raw = localStorage.getItem('catalyst_addrs');
-      if(!raw){
-        // prefill defaults
-        $('addrCata').value = DEFAULT_ADDRS.cata;
-        $('addrStaking').value = DEFAULT_ADDRS.staking;
-        $('addrGovernance').value = DEFAULT_ADDRS.governance;
-        $('addrCouncil').value = DEFAULT_ADDRS.council;
-        log('Prefilled default addresses');
-        return;
-      }
-      const obj = JSON.parse(raw);
-      if(obj.addrCata) $('addrCata').value = obj.addrCata;
-      if(obj.addrStaking) $('addrStaking').value = obj.addrStaking;
-      if(obj.addrGovernance) $('addrGovernance').value = obj.addrGovernance;
-      if(obj.addrCouncil) $('addrCouncil').value = obj.addrCouncil;
-      log('Loaded saved addresses');
-    } catch(e){ log('loadSavedAddrs err', e); }
+  try {
+    const raw = localStorage.getItem('catalyst_addrs');
+    if(!raw){
+      // Prefill defaults
+      $('addrCata').value = DEFAULT_ADDRS.cata;
+      $('addrStaking').value = DEFAULT_ADDRS.staking;
+      $('addrGovernance').value = DEFAULT_ADDRS.governance;
+      $('addrCouncil').value = DEFAULT_ADDRS.council;
+      log('Prefilled default addresses');
+      return;
+    }
+    const obj = JSON.parse(raw);
+
+    // Only apply saved values if they are DIFFERENT from defaults
+    if(obj.addrCata && obj.addrCata !== DEFAULT_ADDRS.cata) {
+      $('addrCata').value = obj.addrCata;
+    } else {
+      $('addrCata').value = DEFAULT_ADDRS.cata;
+    }
+
+    if(obj.addrStaking && obj.addrStaking !== DEFAULT_ADDRS.staking) {
+      $('addrStaking').value = obj.addrStaking;
+    } else {
+      $('addrStaking').value = DEFAULT_ADDRS.staking;
+    }
+
+    if(obj.addrGovernance && obj.addrGovernance !== DEFAULT_ADDRS.governance) {
+      $('addrGovernance').value = obj.addrGovernance;
+    } else {
+      $('addrGovernance').value = DEFAULT_ADDRS.governance;
+    }
+
+    if(obj.addrCouncil && obj.addrCouncil !== DEFAULT_ADDRS.council) {
+      $('addrCouncil').value = obj.addrCouncil;
+    } else {
+      $('addrCouncil').value = DEFAULT_ADDRS.council;
+    }
+
+    log('Loaded saved addresses (with defaults fallback)');
+  } catch(e){
+    log('loadSavedAddrs err', e);
   }
+  }
+  
 
   // Attach contract instances (requires signer)
   async function attachContractsIfSet(){
@@ -1096,6 +1262,10 @@ async function connect() {
     await attachContractsIfSet();
 
     log("Connected", userAddr);
+
+    // 👇 auto-fetch council state right after connect
+    await autoRefreshAll();
+
   } catch (e) {
     log("connect err", e?.message || e);
   }
@@ -1117,7 +1287,7 @@ function disconnect() {
   $('disconnectBtn').classList.add('hidden');
 
   log("Disconnected");
-}
+	  }
 
 
 // ---------- CATA functions ----------
@@ -1149,6 +1319,114 @@ async function cataBurn() {
     hideLoading();
   }
 }
+
+// Function for Admin to directly set a new Council address
+async function cataSetCouncil() {
+    try {
+        if (!contracts.cata) {
+            await attachContractsIfSet();
+            if (!contracts.cata) return alert('Set CATA contract address first');
+        }
+
+        const newCouncil = $('newCouncilAddress').value.trim();
+        if (!ethers.utils.isAddress(newCouncil)) {
+            return alert("❌ Invalid new Council address.");
+        }
+        
+        showLoading("Setting new Council...");
+        
+        // Direct call to the token contract's setCouncil function
+        const tx = await contracts.cata.setCouncil(newCouncil);
+        
+        log('cata.setCouncil tx', tx.hash);
+        await tx.wait();
+        log('cata.setCouncil completed');
+        
+        alert(`✅ Council successfully set to ${newCouncil}.`);
+
+    } catch (e) { 
+        log('cataSetCouncil err', e?.message || e);
+        // This will revert if the connected wallet is NOT the DEFAULT_ADMIN_ROLE holder.
+        alert(`Set Council failed: ${e.message || e}`);
+    } finally { 
+        hideLoading(); 
+    }
+}
+
+// --------------------------------------------------------------------------------------
+
+// Function for Admin to directly set a new Minter address
+async function cataSetMinter() {
+    try {
+        if (!contracts.cata) {
+            await attachContractsIfSet();
+            if (!contracts.cata) return alert('Set CATA contract address first');
+        }
+
+        const newMinter = $('newMinterAddress').value.trim();
+        if (!ethers.utils.isAddress(newMinter)) {
+            return alert("❌ Invalid new Minter address.");
+        }
+        
+        showLoading("Setting new Minter...");
+        
+        // Direct call to the token contract's setMinter function
+        const tx = await contracts.cata.setMinter(newMinter);
+        
+        log('cata.setMinter tx', tx.hash);
+        await tx.wait();
+        log('cata.setMinter completed');
+        
+        alert(`✅ Minter successfully set to ${newMinter}.`);
+
+    } catch (e) { 
+        log('cataSetMinter err', e?.message || e);
+        // This will revert if the connected wallet is NOT the DEFAULT_ADMIN_ROLE holder.
+        alert(`Set Minter failed: ${e.message || e}`);
+    } finally { 
+        hideLoading(); 
+    }
+}
+
+			   // Function for Admin to directly revoke the Minter role from an address
+async function cataRevokeMinter() {
+    try {
+        if (!contracts.cata) {
+            await attachContractsIfSet();
+            if (!contracts.cata) return alert('Set CATA contract address first');
+        }
+
+        const minterToRevoke = $('revokeMinterAddress').value.trim();
+        if (!ethers.utils.isAddress(minterToRevoke)) {
+            return alert("❌ Invalid address to revoke.");
+        }
+        
+        showLoading(`Revoking Minter role from ${minterToRevoke}...`);
+        
+        // DIRECT CALL: The connected wallet must be the DEFAULT_ADMIN_ROLE holder.
+        const tx = await contracts.cata.revokeMinter(minterToRevoke);
+        
+        log('cata.revokeMinter tx', tx.hash);
+        await tx.wait();
+        log('cata.revokeMinter completed');
+        
+        alert(`✅ Minter Role successfully revoked from ${minterToRevoke}.`);
+
+    } catch (e) { 
+        log('cataRevokeMinter err', e?.message || e);
+        // This will revert if the connected wallet is NOT the DEFAULT_ADMIN_ROLE holder.
+        alert(`Revoke Minter failed: ${e.message || e}`);
+    } finally { 
+        hideLoading(); 
+    }
+}
+
+// BINDING TO BUTTON
+$('revokeMinterRoleBtn').onclick = cataRevokeMinter;
+
+// BINDING TO BUTTONS (Add this to your main init/binding block)
+$('grantCouncilRoleBtn').onclick = cataSetCouncil;
+$('grantMinterRoleBtn').onclick = cataSetMinter;
 
 // Pause (admin only)
 async function cataPause() {
@@ -1218,38 +1496,89 @@ async function cataSwapAdmin() {
   }
 }
 
-// Transparency (view supply)
+	  // Transparency (view supply, roles, minters) - OPTIMIZED WITH Promise.all
 async function fetchTransparency() {
   try {
-    if (!contracts.cata) {
-      await attachContractsIfSet();
-      if (!contracts.cata) return alert('Set CATA contract address first');
+    if (!contracts.cata || !provider) {
+      if (!contracts.cata) return alert('Please connect wallet and set CATA contract address first');
     }
 
     showLoading("Fetching transparency...");
-    const totalSupply = await contracts.cata.totalSupply();
-    const maxSupply = await contracts.cata.MAX_SUPPLY();
+
+    // 1. --- PARALLEL READS (FASTEST PART) ---
+    // Execute all independent state reads simultaneously
+    const [
+      totalSupply, 
+      maxSupply, 
+      councilAddress
+    ] = await Promise.all([
+      contracts.cata.totalSupply(),
+      contracts.cata.MAX_SUPPLY(),
+      contracts.cata.council()
+    ]);
+    
     const remainingMintable = maxSupply.sub(totalSupply);
 
+    // 2. --- PARALLEL EVENT LOOKUPS (SLOWEST PART) ---
+    // Execute all necessary historical queries simultaneously
+    const [
+      adminSwapEvents,
+      minterSetEvents,
+      minterRevokedEvents
+    ] = await Promise.all([
+      contracts.cata.queryFilter("AdminSwapped", 0, "latest"),
+      contracts.cata.queryFilter("MinterSet", 0, "latest"),
+      contracts.cata.queryFilter("MinterRevoked", 0, "latest")
+    ]);
+
+
+    // 3. --- POST-PROCESSING LOGIC (Admin Address - Sequential Logic) ---
+    let adminAddress = "⚠️ Unknown";
+
+    if (adminSwapEvents.length > 0) {
+      // Find the admin via the last 'AdminSwapped' event
+      adminAddress = adminSwapEvents[adminSwapEvents.length - 1].args.newAdmin;
+    } else {
+      // Fallback: Check the first ever 'TokensMinted' event (less reliable)
+      const mintedEvents = await contracts.cata.queryFilter("TokensMinted", 0, "latest");
+      if (mintedEvents.length > 0) {
+        adminAddress = mintedEvents[0].args.to;
+      }
+    }
+    
+    // 4. --- POST-PROCESSING LOGIC (Minters - Sequential Logic) ---
+    let activeMinters = new Set();
+    
+    // Process MinterSet and MinterRevoked events
+    for (const evt of minterSetEvents) {
+      const minter = evt.args.newMinter;
+      if (minter && minter !== ethers.ZeroAddress) {
+        activeMinters.add(minter);
+      }
+    }
+    for (const evt of minterRevokedEvents) {
+      const revoked = evt.args.revokedMinter;
+      activeMinters.delete(revoked);
+    }
+    const minterList = Array.from(activeMinters);
+
+
+    // 5. --- UI Update ---
+    $('cataAdminAddress').innerText = adminAddress;
+    $('cataCouncilAddress').innerText = councilAddress;
     $('cataTotalSupply').innerText = ethers.utils.formatUnits(totalSupply, 18) + " CATA";
     $('cataMaxSupply').innerText = ethers.utils.formatUnits(maxSupply, 18) + " CATA";
     $('cataRemainingMintable').innerText = ethers.utils.formatUnits(remainingMintable, 18) + " CATA";
+    $('cataMinters').innerText = minterList.length > 0 
+      ? minterList.join("\n")
+      : "None";
+	  
   } catch (e) {
     log('fetchTransparency err', e?.message || e);
-    alert(`Transparency fetch failed: ${e.message || e}`);
+    alert(`Transparency fetch failed: ${e.message || e}. Check the console.`);
   } finally {
     hideLoading();
   }
-}
-
-/********************************************************************
- * Loading Indicator
- ********************************************************************/
-function showLoading() {
-  $('loadingIndicator').style.display = 'block';
-}
-function hideLoading() {
-  $('loadingIndicator').style.display = 'none';
 }
 
 /********************************************************************
@@ -2345,7 +2674,93 @@ $('activateStandbyBtn').onclick = async () => {
   } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
 };
 
-// Lock
+
+// ------------------------------------
+// Function Signature Select
+$('recoveryFunctionSelect').onchange = () => {
+    const selectedValue = $('recoveryFunctionSelect').value;
+    $('recoveryFunction').value = selectedValue;
+    
+    // Clear proposed and args fields on new selection
+    $('inputRecoveryProposed').value = '';  // UPDATED ID
+    $('recoveryArgs').value = '';
+
+    if (selectedValue.includes('swapAdmin(address,address)')) {
+        $('recoveryArgs').value = '0xNewAdmin, 0xOldAdmin';
+        $('inputRecoveryProposed').value = '0xNewAdmin';  // UPDATED ID
+    } else if (selectedValue.includes('changeAdmin(address)')) {
+        $('recoveryArgs').value = '0xNewAdmin';
+        $('inputRecoveryProposed').value = '0xNewAdmin'; // UPDATED ID
+    } else if (selectedValue.includes('()')) {
+        // pause(), unpause()
+        $('recoveryArgs').value = '';
+    }
+};
+
+// Encode Calldata Button
+$('encodeCallDataBtn').onclick = async () => {
+    try {
+        const fnSig = $('recoveryFunction').value.trim();
+        const args = $('recoveryArgs').value.trim().split(',').map(a => a.trim()).filter(Boolean);
+        
+        if (!fnSig) return alert("❌ Function signature is required.");
+        
+        const iface = new ethers.utils.Interface([`function ${fnSig}`]);
+        const fnName = fnSig.split('(')[0];
+
+        // UPDATED ID
+        $('inputRecoveryCallData').value = iface.encodeFunctionData(fnName, args); 
+        alert("✅ Calldata encoded");
+    } catch (e) { alert("❌ Error encoding calldata. Check signature and arguments: " + (e.message || e)); }
+};
+    
+// Propose Recovery Button
+$('proposeRecoveryBtn').onclick = async () => {
+    try {
+        showLoading();
+        // UPDATED IDs
+        const proposed = $('inputRecoveryProposed').value.trim(); 
+        const target = $('inputRecoveryCallTarget').value.trim(); 
+        const calldata = $('inputRecoveryCallData').value.trim();
+        
+        if (!target || target === '0x') return alert("❌ Target contract address is required.");
+        if (!calldata || calldata.length < 10) return alert("❌ Calldata must be encoded.");
+
+        const tx = await contracts.council.proposeRecovery(proposed, target, calldata);
+        await tx.wait();
+        alert("✅ Recovery proposed");
+    } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+	  
+$('approveRecoveryBtn').onclick = async () => {
+    try { 
+        showLoading(); 
+        const tx = await contracts.council.approveRecovery();
+        await tx.wait(); 
+        alert("✅ Recovery approved");
+    } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+$('executeRecoveryBtn').onclick = async () => {
+    try { 
+        showLoading(); 
+        const tx = await contracts.council.executeRecovery(); 
+        await tx.wait(); 
+        alert("✅ Recovery executed");
+    } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+$('vetoRecoveryBtn').onclick = async () => {
+    try { 
+        showLoading(); 
+        const tx = await contracts.council.lastHonestHaltAndPromote(); 
+        await tx.wait(); 
+        alert("✅ Recovery vetoed");
+    } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
+};
+
+	    // Lock
 $('clearLockBtn').onclick = async () => {
   try {
     showLoading();
@@ -2355,87 +2770,228 @@ $('clearLockBtn').onclick = async () => {
   } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
 };
 
-// Recovery
-$('encodeCallDataBtn').onclick = async () => {
+	  
+	
+	  async function refreshRecovery() {
+  if (!contracts?.council) return;
+
+  // Use a global indicator for any recovery activity
+  showLoading("recovery"); 
+
   try {
-    const fnSig = $('recoveryFunction').value.trim();
-    const args = $('recoveryArgs').value.trim().split(',').map(a => a.trim()).filter(Boolean);
-    const iface = new ethers.utils.Interface([`function ${fnSig}`]);
-    const fnName = fnSig.split('(')[0];
-    $('recoveryCallData').value = iface.encodeFunctionData(fnName, args);
-    alert("✅ Calldata encoded");
-  } catch (e) { alert("❌ " + (e.message || e)); }
-};
+    // NOTE: The previous check for 'hasProposal' is permanently removed
+    // to ensure raw contract values (even zero/empty ones) are displayed.
 
-$('proposeRecoveryBtn').onclick = async () => {
+    // --- Fetch deadline ---
+    let deadlineNum = 0;
+    try {
+      deadlineNum = await contracts.council.getRecoveryDeadline();
+      deadlineNum = Number(deadlineNum);
+    } catch (err) {
+      console.warn("getRecoveryDeadline failed:", err);
+    }
+    // FIX: Always display raw deadline.
+    $("recoveryDeadline").innerText = deadlineNum > 0 ? new Date(deadlineNum * 1000).toLocaleString() : deadlineNum.toString();
+
+    // --- Fetch proposed ---
+    let proposed = ethers.constants.AddressZero;
+    try {
+      proposed = await contracts.council.getRecoveryProposed();
+    } catch (err) {
+      // DEBUG: Log the error if fetching the proposed address fails
+      console.error("DEBUG FAILED: getRecoveryProposed failed.", err);
+      // Set to a failed state, otherwise it might display a default value (AddressZero) incorrectly
+      $("recoveryProposed").innerText = "[!CALL FAILED]";
+      throw new Error("Proposed fetch failed."); // Re-throw to skip subsequent steps if the core proposal data is bad
+    }
+    // FIX: Always display raw proposed address.
+    $("recoveryProposed").innerText = proposed;
+
+    
+    // Executed?
+    let executed = false;
+    try {
+      executed = await contracts.council.getRecoveryExecuted();
+    } catch (err) {
+      console.warn("getRecoveryExecuted failed:", err);
+    }
+    $("recoveryExecuted").innerText = executed ? "✅ Executed" : "❌ Not executed";
+
+    // Call target
+    try {
+      const target = await contracts.council.getRecoveryCallTarget();
+      // FIX: Always display raw target address.
+      $("recoveryCallTarget").innerText = target;
+    } catch (err) {
+      // DEBUG: Log the error instead of silently replacing with "—"
+      console.error("DEBUG FAILED: getRecoveryCallTarget failed.", err);
+      $("recoveryCallTarget").innerText = "[!CALL FAILED]";
+    }
+
+    // Call data
+    try {
+      const callData = await contracts.council.getRecoveryCallData();
+      // FIX: Always display raw callData.
+      $("recoveryCallData").innerText = callData;
+    } catch (err) {
+      // DEBUG: Log the error instead of silently replacing with "—"
+      console.error("DEBUG FAILED: getRecoveryCallData failed.", err);
+      $("recoveryCallData").innerText = "[!CALL FAILED]";
+    }
+
+    // Approvals
+    try {
+      const approvals = await contracts.council.getRecoveryApprovals();
+      $("recoveryApprovals").innerText = approvals.toString();
+    } catch (err) {
+      console.error("DEBUG FAILED: getRecoveryApprovals failed.", err);
+      $("recoveryApprovals").innerText = "[!CALL FAILED]";
+    }
+
+    // Approved by (guardians list)
+    try {
+      const guardians = await contracts.council.getActiveGuardians();
+      const approvedBy = [];
+      const currentNonce = await contracts.council.getAdminRequestNonce(); 
+      for (const g of guardians) {
+        try {
+          const approved = await contracts.council.hasApproved(g);
+          if (approved) approvedBy.push(g);
+        } catch {}
+      }
+      $("recoveryApprovedBy").innerText =
+        approvedBy.length > 0 ? approvedBy.join(", ") : "—";
+    } catch (err) {
+      // DEBUG: Log error for the whole approval block
+      console.error("DEBUG FAILED: ApprovedBy block failed.", err);
+      $("recoveryApprovedBy").innerText = "[!BLOCK FAILED]";
+    }
+  } catch (err) {
+    // Catch errors re-thrown from inside the try block (e.g., if proposed fails)
+    console.error("refreshRecovery failed with re-thrown error:", err); 
+  }
+
+  hideLoading();
+	  }
+
+
+
+// ===========================
+// Recovery Event Watchers
+// ===========================
+function watchRecoveryEvents() {
+  if (!contracts?.council) return;
+
+  // Proposal created
+  contracts.council.on("RecoveryProposed", (proposer, proposed, callTarget, deadline, event) => {
+    console.log("⚡ RecoveryProposed", { proposer, proposed, callTarget, deadline: deadline.toString() });
+    refreshRecovery();
+  });
+
+  // Approval added
+  contracts.council.on("RecoveryApproved", (guardian, approvals, event) => {
+    console.log("⚡ RecoveryApproved by", guardian, " → approvals:", approvals.toString());
+    refreshRecovery();
+  });
+
+  // Proposal executed
+  contracts.council.on("RecoveryExecuted", (proposed, callTarget, event) => {
+    console.log("⚡ RecoveryExecuted", { proposed, callTarget });
+    refreshRecovery();
+  });
+}
+
+// ===========================
+// Initialization Hook
+// ===========================
+// Call this once after contracts are connected
+async function initRecoveryUI() {
+  // First manual refresh
+  await refreshRecovery();
+
+  // Start listening for live events
+  watchRecoveryEvents();
+}
+       
+    
+async function refreshVetoWarning() {
+  if (!contracts.council) {
+    console.warn("❌ Council contract not attached yet");
+    return;
+  }
+
   try {
-    showLoading();
-    const kind = parseInt($('recoveryKind').value, 10);
-    const proposed = $('recoveryProposed').value.trim();
-    const target = $('recoveryCallTarget').value.trim();
-    const calldata = $('recoveryCallData').value.trim();
-    const tx = await contracts.council.proposeRecovery(kind, proposed, target, calldata);
-    await tx.wait();
-    alert("✅ Recovery proposed");
-  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
-};
+    const [guardian, expiry] = await contracts.council.tempVeto();
+    const warn = await contracts.council.warning();
 
-$('approveRecoveryBtn').onclick = async () => {
-  try { showLoading(); const kind = parseInt($('recoveryKind').value, 10);
-    const tx = await contracts.council.approveRecovery(kind); await tx.wait(); alert("✅ Recovery approved");
-  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
-};
+    // Guardian field: text + tooltip
+    $("lastHonestGuardian").innerText = guardian;
+    $("lastHonestGuardian").title = guardian;
 
-$('executeRecoveryBtn').onclick = async () => {
-  try { showLoading(); const kind = parseInt($('recoveryKind').value, 10);
-    const tx = await contracts.council.executeRecovery(kind); await tx.wait(); alert("✅ Recovery executed");
-  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
-};
+    // Expiry field
+    $("lastHonestExpiry").innerText =
+      expiry > 0 ? new Date(expiry * 1000).toLocaleString() : "—";
 
-$('vetoRecoveryBtn').onclick = async () => {
-  try { showLoading(); const kind = parseInt($('recoveryKind').value, 10);
-    const tx = await contracts.council.lastHonestHaltAndPromote(kind); await tx.wait(); alert("✅ Recovery vetoed");
-  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
-};
+    // Warning field (color coded)
+    const warningEl = $("warningFlag");
+    if (warn) {
+      warningEl.innerText = "⚠️ Warning Active";
+      warningEl.classList.add("text-yellow-400");
+      warningEl.classList.remove("text-green-400");
+    } else {
+      warningEl.innerText = "✅ No Warning";
+      warningEl.classList.add("text-green-400");
+      warningEl.classList.remove("text-yellow-400");
+    }
+  } catch (err) {
+    console.error("refreshVetoWarning failed:", err);
+    $("lastHonestGuardian").innerText = "ERROR";
+    $("lastHonestExpiry").innerText = "ERROR";
+    $("warningFlag").innerText = "ERROR";
+    $("warningFlag").classList.remove("text-green-400", "text-yellow-400");
+    $("warningFlag").classList.add("text-red-400");
+  }
+}
 
-// ---------- Read-only State ----------
+async function refreshDao() {
+  const dao = await contracts.council.dao();
+  const [pending, earliest, deadline] = await contracts.council.getPendingDAOState();
+  $("daoAddr").innerText = dao;
+  $("pendingDaoAddr").innerText = pending;
+  $("pendingDaoWindow").innerText = `Earliest: ${new Date(earliest*1000).toLocaleString()} | Deadline: ${new Date(deadline*1000).toLocaleString()}`;
+}
 
-$('refreshDaoBtn').onclick = async () => {
-  try {
-    showLoading();
-    const dao = await contracts.council.dao();
-    const [pending, earliest, deadline] = await contracts.council.getPendingDAOState();
-    $('daoAddr').innerText = dao;
-    $('pendingDaoAddr').innerText = pending;
-    $('pendingDaoWindow').innerText = `Earliest: ${new Date(earliest*1000).toLocaleString()} | Deadline: ${new Date(deadline*1000).toLocaleString()}`;
-  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
-};
+async function refreshGuardians() {
+  const active = await contracts.council.getActiveGuardians();
+  const standby = await contracts.council.getStandbyGuardians();
+  const [pa, paEarliest, paDeadline] = await contracts.council.getPendingActiveBatchState();
+  const [ps, psEarliest, psDeadline] = await contracts.council.getPendingStandbyBatchState();
 
-$('refreshGuardiansBtn').onclick = async () => {
-  try {
-    showLoading();
-    const active = await contracts.council.getActiveGuardians();
-    const standby = await contracts.council.getStandbyGuardians();
-    const [pa, paEarliest, paDeadline] = await contracts.council.getPendingActiveBatchState();
-    const [ps, psEarliest, psDeadline] = await contracts.council.getPendingStandbyBatchState();
-    $('activeGuardians').innerText = active.join("\n");
-    $('standbyGuardians').innerText = standby.join("\n");
-    $('pendingActiveGuardians').innerText = pa.join("\n");
-    $('pendingActiveWindow').innerText = `Earliest: ${new Date(paEarliest*1000).toLocaleString()} | Deadline: ${new Date(paDeadline*1000).toLocaleString()}`;
-    $('pendingStandbyGuardians').innerText = ps.join("\n");
-    $('pendingStandbyWindow').innerText = `Earliest: ${new Date(psEarliest*1000).toLocaleString()} | Deadline: ${new Date(psDeadline*1000).toLocaleString()}`;
-  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
-};
+  $("activeGuardians").innerText = active.join("\n");
+  $("standbyGuardians").innerText = standby.join("\n");
+  $("pendingActiveGuardians").innerText = pa.join("\n");
+  $("pendingActiveWindow").innerText = `Earliest: ${new Date(paEarliest*1000).toLocaleString()} | Deadline: ${new Date(paDeadline*1000).toLocaleString()}`;
+  $("pendingStandbyGuardians").innerText = ps.join("\n");
+  $("pendingStandbyWindow").innerText = `Earliest: ${new Date(psEarliest*1000).toLocaleString()} | Deadline: ${new Date(psDeadline*1000).toLocaleString()}`;
+}
 
-$('refreshLockBtn').onclick = async () => {
-  try {
-    showLoading();
-    const locked = await contracts.council.locked();
-    $('lockStatus').innerText = locked ? "🔒 Locked" : "✅ Unlocked";
-  } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
-};
+async function refreshLock() {
+  const locked = await contracts.council.locked();
+  $("lockStatus").innerText = locked ? "🔒 Locked" : "✅ Unlocked";
+}
 
-
+// ---------- Aggregator ----------
+async function autoRefreshAll() {
+  await Promise.all([
+    fetchTransparency(),
+	  refreshRecovery(),
+    refreshVetoWarning(),
+    refreshDao(),
+    refreshGuardians(),
+    refreshLock()
+  ]);
+}
+	  
 
   // ---------- Bind UI on load ----------
   window.addEventListener('load', async ()=>{
@@ -2446,10 +3002,18 @@ $('refreshLockBtn').onclick = async () => {
   $('addrCouncil').value = DEFAULT_ADDRS.council;
 
   await loadABIs();
+	  await attachContractsIfSet();
 
   // Connect / disconnect
   $('connectBtn').onclick = connect;
   $('disconnectBtn').onclick = disconnect;
+
+$("refreshRecoveryBtn").addEventListener("click", () => {
+  refreshRecovery(); });
+$("refreshDaoBtn").onclick = refreshDao;
+$("refreshGuardiansBtn").onclick = refreshGuardians;
+$("refreshLockBtn").onclick = refreshLock;
+    
 
   // Refreshes the contracts based on the addresses in the input fields
   $('saveAddrs').onclick = ()=>{
@@ -2519,6 +3083,7 @@ $('batchHarvestBtn').onclick = batchHarvest;
 $('pendingRewardsBtn').onclick = checkPendingRewards;
 $('refreshStakingStatsBtn').onclick = refreshStakingStats;
 $('viewPortfolioBtn').onclick = viewPortfolio;
+
 	  
     log('UI ready');
   });
@@ -2550,6 +3115,17 @@ function selectTab(tabId) {
   const section = document.getElementById(tabId);
   if (section) section.classList.remove('hidden');
 		}
+
+	  /********************************************************************
+ * Loading Indicator
+ ********************************************************************/
+function showLoading() {
+  // Use 'flex' to activate the centering rules defined in your CSS
+  $('loadingIndicator').style.display = 'flex';
+}
+function hideLoading() {
+  $('loadingIndicator').style.display = 'none';
+}
 	  
   </script>
 </body>
