@@ -189,6 +189,28 @@ AccessControlUpgradeable,
         super._update(from, to, value);
     }
 
+// -----------------------------------------------------------------
+    // 🔒 ACCESS CONTROL OVERRIDES (Disabling Direct Role Manipulation)
+    // -----------------------------------------------------------------
+    
+    /// @dev Overrides AccessControlUpgradeable's public grantRole to enforce secure, explicit role management.
+    function grantRole(bytes32 role, address account) public virtual override {
+        // This prevents the Admin from calling grantRole(DEFAULT_ADMIN_ROLE, otherAddress)
+        // and creating multiple Admins, which would bypass the Council's control.
+        revert("CataERC20: Granting roles is disabled. Use explicit wrappers.");
+    }
+
+    /// @dev Overrides AccessControlUpgradeable's public revokeRole to enforce secure, explicit role management.
+    function revokeRole(bytes32 role, address account) public virtual override {
+        revert("CataERC20: Revoking roles is disabled. Use explicit wrappers.");
+    }
+    
+    // You may also want to disable the ability for an account to voluntarily renounce the role
+    function renounceRole(bytes32 role, address account) public virtual override {
+        revert("CataERC20: Renouncing roles is disabled. Use explicit wrappers.");
+    }
+
+
     // -------------------------
     // Storage gap for future variables
     // -------------------------
