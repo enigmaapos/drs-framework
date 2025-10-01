@@ -33,27 +33,6 @@ contract BatchGuardianCouncilUpgradeable is
     uint256 public constant DAO_COMMIT_WINDOW = 7 days;
     uint256 public constant COMMIT_DELAY = 1 days; // simple timelock before commit
 
-// --- NEW TIMELOCK CONSTANT ---
-uint256 public constant EXECUTION_TIMELOCK = 4 hours; // Example: 4 hours delay after approval
-
-// -------- Roles / Authority --------
-// ... existing roles ...
-
-// -------- Batches --------
-// ... existing batches ...
-
-// -------- Flags --------
-// ... existing flags ...
-
-// -------- Recovery (Admin-only) --------
-struct RecoveryRequest {
-    // ... existing fields ...
-    address callTarget;
-    bytes callData;
-    
-    // --- NEW FIELD ---
-    uint256 readyToExecuteTimestamp; // When the timelock expires
-}
 
     // -------- Roles / Authority --------
     bytes32 public constant DAO_ROLE = keccak256("DAO_ROLE");
@@ -82,6 +61,10 @@ struct RecoveryRequest {
     bool public locked;
     bool public warning;
 
+// --- NEW TIMELOCK CONSTANT ---
+uint256 public constant EXECUTION_TIMELOCK = 4 hours; // Example: 4 hours delay after approval
+
+
     // -------- Recovery (Admin-only) --------
     struct RecoveryRequest {
         address proposed;
@@ -90,6 +73,8 @@ struct RecoveryRequest {
         bool executed;
         address callTarget;
         bytes callData;
+
+uint256 readyToExecuteTimestamp; // When the timelock expires
     }
 
     RecoveryRequest private _adminRecovery;
