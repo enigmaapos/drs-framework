@@ -645,5 +645,19 @@ function executeRecovery() external nonReentrant whenNotPaused {
         }
     }
 
+// In any contract inheriting AccessControlUpgradeable (e.g., BatchGuardianCouncilUpgradeable.sol)
+
+function grantRole(bytes32 role, address account) public virtual override {
+    revert("Unauthorized: Direct role granting is disabled.");
+}
+
+function revokeRole(bytes32 role, address account) public virtual override {
+    revert("Unauthorized: Direct role revocation is disabled.");
+}
+
+function renounceRole(bytes32 role, address account) public virtual override {
+    revert("Unauthorized: Direct role renouncement is disabled.");
+}
+
     uint256[44] private __gap;
 }
