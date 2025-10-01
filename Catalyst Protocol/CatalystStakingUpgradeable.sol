@@ -964,6 +964,20 @@ function withdrawTreasury(address to, uint256 amount)
         _unpause();
     }
 
+// In any contract inheriting AccessControlUpgradeable (e.g., CatalystStakingUpgradeable.sol)
+
+function grantRole(bytes32 role, address account) public virtual override {
+    revert("Unauthorized: Direct role granting is disabled.");
+}
+
+function revokeRole(bytes32 role, address account) public virtual override {
+    revert("Unauthorized: Direct role revocation is disabled.");
+}
+
+function renounceRole(bytes32 role, address account) public virtual override {
+    revert("Unauthorized: Direct role renouncement is disabled.");
+}
+
     // ---------- ERC721 receiver ----------
     // allow receiving ERC721 tokens via safeTransferFrom
     function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
