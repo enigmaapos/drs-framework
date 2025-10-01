@@ -809,26 +809,35 @@
 
 <h2 class="text-xl font-semibold mb-2">1. New Recovery Request (Admin Only)</h2>
 
-        <h3 class="text-sm font-semibold mb-1">Request Parameters</h3>
-            
-            <select id="recoveryFunctionSelect" class="w-full p-2 rounded bg-black/20">
-                <option value="" disabled selected>-- Select Admin Function --</option>
-                <option value="swapAdmin(address,address)">swapAdmin(address,address)</option>
-                <option value="changeAdmin(address)">changeAdmin(address)</option>
-                <option value="pause()">pause()</option>
-                <option value="unpause()">unpause()</option>
-            </select>
+<h3 class="text-sm font-semibold mb-1">Recovery Request Parameters</h3>
+<div class="space-y-3">
+    
+    <select id="recoveryFunctionSelect" class="w-full p-2 rounded bg-black/20">
+        <option value="" disabled selected>-- Select Admin Function --</option>
+        <option value="setCouncil(address)">setCouncil(address)</option>
+        <option value="setMinter(address)">setMinter(address)</option>
+        <option value="swapAdmin(address,address)">swapAdmin(address,address)</option>
+        <option value="pause()">pause()</option>
+        <option value="unpause()">unpause()</option>
+        <option value="upgradeTo(address)">upgradeTo(address) - UUPS</option>
+    </select>
+    
+    <input id="inputRecoveryProposed" placeholder="Proposed address (e.g., new Admin or set address)" class="w-full p-2 rounded bg-black/20" />
+    
+    <input id="inputRecoveryCallTarget" placeholder="Target contract address (e.g., CataERC20 Proxy)" class="w-full p-2 rounded bg-black/20" />
 
-            <input id="inputRecoveryProposed" placeholder="Proposed address (e.g., new Admin)" class="w-full p-2 rounded bg-black/20" />
-<input id="inputRecoveryCallTarget" placeholder="Target contract address (e.g., CataERC20 Proxy)" class="w-full p-2 rounded bg-black/20" />
-            <input id="recoveryFunction" placeholder="Function Signature (e.g., swapAdmin(address,address))" class="w-full p-2 rounded bg-black/20" />
-            <input id="recoveryArgs" placeholder="Arguments (comma-separated, e.g., 0xNewAdmin, 0xOldAdmin)" class="w-full p-2 rounded bg-black/20" />
-            <textarea id="inputRecoveryCallData" placeholder="Calldata (auto-generated 0x...)" class="w-full p-2 rounded bg-black/20 font-mono h-20" readonly></textarea>
-	
-            <button id="encodeCallDataBtn" class="w-full p-2 bg-blue-600 hover:bg-blue-700 rounded-lg">Encode CallData</button>
+    <div id="recoveryArgInputs">
+        <input id="recoveryFunction" placeholder="Function Signature (e.g., swapAdmin(address,address))" class="w-full p-2 rounded bg-black/20" />
+        <input id="recoveryArgs" placeholder="Arguments (comma-separated, e.g., 0xNewAdmin, 0xOldAdmin)" class="w-full p-2 rounded bg-black/20" />
+    </div>
+
+    <textarea id="inputRecoveryCallData" placeholder="Calldata (auto-generated 0x...)" class="w-full p-2 rounded bg-black/20 font-mono h-20" readonly></textarea>
+    
+    <button id="encodeCallDataBtn" class="w-full p-2 bg-blue-600 hover:bg-blue-700 rounded-lg">1. Encode CallData</button>
+    <button id="proposeRecoveryBtn" class="w-full p-2 bg-red-700 hover:bg-red-600 rounded-lg">2. Propose Recovery</button>
+</div>
 	
             <div class="flex gap-2 mt-2">
-                <button id="proposeRecoveryBtn" class="flex-1 p-2 bg-red-600 hover:bg-red-700 rounded-lg">Propose</button>
                 <button id="approveRecoveryBtn" class="flex-1 p-2 bg-orange-600 hover:bg-orange-700 rounded-lg">Approve</button>
                 <button id="executeRecoveryBtn" class="flex-1 p-2 bg-green-600 hover:bg-green-700 rounded-lg">Execute</button>
                 <button id="vetoRecoveryBtn" class="flex-1 p-2 bg-slate-600 hover:bg-slate-700 rounded-lg">Veto (Last Honest)</button>
@@ -2676,28 +2685,72 @@ $('activateStandbyBtn').onclick = async () => {
 
 
 // ------------------------------------
-// Function Signature Select
+// Function Signature Select - Handles UI Visibility and Pre-populates fields
 $('recoveryFunctionSelect').onchange = () => {
     const selectedValue = $('recoveryFunctionSelect').value;
     $('recoveryFunction').value = selectedValue;
     
-    // Clear proposed and args fields on new selection
-    $('inputRecoveryProposed').value = '';  // UPDATED ID
+    // Clear fields on new selection
+    $('inputRecoveryProposed').value = '';
     $('recoveryArgs').value = '';
+    $('inputRecoveryCallData').value = ''; // Clear calldata output
+    
+    // Get references to elements for dynamic visibility
+    const argContainer = $('recoveryArgInputs');
+    const proposedInput = $('inputRecoveryProposed');
+    
+    // Reset properties
+    argContainer.style.display = 'block'; 
+    proposedInput.readOnly = false;
+    proposedInput.placeholder = 'Proposed address (e.g., new Admin or set address)';
+    
+    const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+    let autoEncode = false;
 
-    if (selectedValue.includes('swapAdmin(address,address)')) {
+    if (selectedValue.includes('()')) {
+        // Case 1: No arguments (e.g., pause(), unpause())
+        
+        // HIDE argument inputs
+        argContainer.style.display = 'none'; 
+        
+        // Use ZERO_ADDRESS placeholder as the 'proposed' address
+        proposedInput.value = ZERO_ADDRESS; 
+        proposedInput.placeholder = '0x00...00 (Not Applicable - Action only)';
+        proposedInput.readOnly = true; // Lock it to prevent errors
+        autoEncode = true;
+
+    } else if (selectedValue.includes('swapAdmin(address,address)')) {
+        // Case 2: Two address arguments (swapAdmin)
+        
         $('recoveryArgs').value = '0xNewAdmin, 0xOldAdmin';
-        $('inputRecoveryProposed').value = '0xNewAdmin';  // UPDATED ID
-    } else if (selectedValue.includes('changeAdmin(address)')) {
-        $('recoveryArgs').value = '0xNewAdmin';
-        $('inputRecoveryProposed').value = '0xNewAdmin'; // UPDATED ID
-    } else if (selectedValue.includes('()')) {
-        // pause(), unpause()
-        $('recoveryArgs').value = '';
+        proposedInput.value = '0xNewAdmin';
+        proposedInput.placeholder = 'Proposed address (0xNewAdmin)';
+        
+    } else if (selectedValue.includes('(address)')) {
+        // Case 3: Single address argument (setCouncil, setMinter, changeAdmin, upgradeTo)
+        
+        $('recoveryArgs').value = '0xAddressToSet';
+        proposedInput.value = '0xAddressToSet'; 
+        proposedInput.placeholder = 'Proposed address (Address being set)';
+    }
+
+    // --- AUTO-ENCODE SIMPLE CALLS ---
+    // Auto-encode if no arguments are required (e.g., pause, unpause)
+    if (autoEncode) {
+        try {
+            const fnSig = $('recoveryFunction').value.trim();
+            const iface = new ethers.utils.Interface([`function ${fnSig}`]);
+            const fnName = fnSig.split('(')[0];
+            // Encode with an empty array of arguments
+            $('inputRecoveryCallData').value = iface.encodeFunctionData(fnName, []); 
+        } catch (e) {
+            $('inputRecoveryCallData').value = "Error during auto-encode. Check console.";
+            console.error(e);
+        }
     }
 };
 
-// Encode Calldata Button
+// Encode Calldata Button - User clicks this after inputting addresses
 $('encodeCallDataBtn').onclick = async () => {
     try {
         const fnSig = $('recoveryFunction').value.trim();
@@ -2708,17 +2761,23 @@ $('encodeCallDataBtn').onclick = async () => {
         const iface = new ethers.utils.Interface([`function ${fnSig}`]);
         const fnName = fnSig.split('(')[0];
 
-        // UPDATED ID
-        $('inputRecoveryCallData').value = iface.encodeFunctionData(fnName, args); 
+        // Filter out placeholder text before encoding
+        const cleanedArgs = args.filter(a => 
+            !a.startsWith('0xNewAdmin') && 
+            !a.startsWith('0xOldAdmin') && 
+            !a.startsWith('0xAddressToSet')
+        );
+
+        $('inputRecoveryCallData').value = iface.encodeFunctionData(fnName, cleanedArgs); 
         alert("✅ Calldata encoded");
     } catch (e) { alert("❌ Error encoding calldata. Check signature and arguments: " + (e.message || e)); }
 };
     
-// Propose Recovery Button
+// Propose Recovery Button - Sends the transaction
 $('proposeRecoveryBtn').onclick = async () => {
     try {
         showLoading();
-        // UPDATED IDs
+        
         const proposed = $('inputRecoveryProposed').value.trim(); 
         const target = $('inputRecoveryCallTarget').value.trim(); 
         const calldata = $('inputRecoveryCallData').value.trim();
@@ -2726,13 +2785,20 @@ $('proposeRecoveryBtn').onclick = async () => {
         if (!target || target === '0x') return alert("❌ Target contract address is required.");
         if (!calldata || calldata.length < 10) return alert("❌ Calldata must be encoded.");
 
-        const tx = await contracts.council.proposeRecovery(proposed, target, calldata);
+        // Check if the proposed address is a placeholder that needs to be replaced
+        let finalProposed = proposed;
+        if (finalProposed.startsWith('0xNewAdmin') || finalProposed.startsWith('0xAddressToSet')) {
+            return alert("❌ Please replace the placeholder in 'Proposed address' with a real address first.");
+        }
+        
+        // This is the call that executes the proposal on the council
+        const tx = await contracts.council.proposeRecovery(finalProposed, target, calldata);
         await tx.wait();
         alert("✅ Recovery proposed");
     } catch (e) { alert("❌ " + (e.message || e)); } finally { hideLoading(); }
 };
 
-	  
+  
 $('approveRecoveryBtn').onclick = async () => {
     try { 
         showLoading(); 
