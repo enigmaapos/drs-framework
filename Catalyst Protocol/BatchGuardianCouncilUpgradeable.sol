@@ -630,17 +630,24 @@ function executeRecovery() external nonReentrant whenNotPaused {
         }
     }
 
-// In any contract inheriting AccessControlUpgradeable (e.g., BatchGuardianCouncilUpgradeable.sol)
 
-function grantRole(bytes32 role, address account) public virtual override {
+// In any contract inheriting AccessControlUpgradeable (e.g., CataERC20Upgradeable, CatalystGovernanceUpgradeable, BatchGuardianCouncilUpgradeable.sol)
+
+/// @dev Overrides grantRole, disabling direct external calls.
+// Parameter names are removed (e.g., 'role' and 'account') to silence compiler warnings.
+function grantRole(bytes32, address) public virtual override {
     revert("Unauthorized: Direct role granting is disabled.");
 }
 
-function revokeRole(bytes32 role, address account) public virtual override {
+/// @dev Overrides revokeRole, disabling direct external calls.
+// Parameter names are removed to silence compiler warnings.
+function revokeRole(bytes32, address) public virtual override {
     revert("Unauthorized: Direct role revocation is disabled.");
 }
 
-function renounceRole(bytes32 role, address account) public virtual override {
+/// @dev Overrides renounceRole, preventing accounts from voluntarily relinquishing a role.
+// Parameter names are removed to silence compiler warnings.
+function renounceRole(bytes32, address) public virtual override {
     revert("Unauthorized: Direct role renouncement is disabled.");
 }
 
