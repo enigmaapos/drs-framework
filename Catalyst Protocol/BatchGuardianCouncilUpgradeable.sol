@@ -33,6 +33,28 @@ contract BatchGuardianCouncilUpgradeable is
     uint256 public constant DAO_COMMIT_WINDOW = 7 days;
     uint256 public constant COMMIT_DELAY = 1 days; // simple timelock before commit
 
+// --- NEW TIMELOCK CONSTANT ---
+uint256 public constant EXECUTION_TIMELOCK = 4 hours; // Example: 4 hours delay after approval
+
+// -------- Roles / Authority --------
+// ... existing roles ...
+
+// -------- Batches --------
+// ... existing batches ...
+
+// -------- Flags --------
+// ... existing flags ...
+
+// -------- Recovery (Admin-only) --------
+struct RecoveryRequest {
+    // ... existing fields ...
+    address callTarget;
+    bytes callData;
+    
+    // --- NEW FIELD ---
+    uint256 readyToExecuteTimestamp; // When the timelock expires
+}
+
     // -------- Roles / Authority --------
     bytes32 public constant DAO_ROLE = keccak256("DAO_ROLE");
 
@@ -101,6 +123,10 @@ contract BatchGuardianCouncilUpgradeable is
     event LastHonestAssigned(address indexed guardian, uint256 expiry);
     event LastHonestHalted(address indexed guardian);
     event RecoveryReset(uint256 newNonce);
+event RecoveryReadyForExecution(
+    uint256 indexed nonce, 
+    uint256 timelockExpiry
+);
 
     // -------- Errors --------
     error Unauthorized();
@@ -299,82 +325,103 @@ contract BatchGuardianCouncilUpgradeable is
     }
 
     function approveRecovery() external notLocked onlyActiveG whenNotPaused {
-        RecoveryRequest storage R = _adminRecovery;
-        if (R.callTarget == address(0)) revert NoActiveRequest();
-        if (R.executed) revert AlreadyExecuted();
-        if (block.timestamp > R.deadline) revert RequestExpired();
+    RecoveryRequest storage R = _adminRecovery;
+    if (R.callTarget == address(0)) revert NoActiveRequest();
+    if (R.executed) revert AlreadyExecuted();
+    if (block.timestamp > R.deadline) revert RequestExpired();
 
-        uint256 nonce = _adminRequestNonce;
-        if (_lastApprovedNonceAdmin[msg.sender] == nonce) revert AlreadyApproved();
+    uint256 nonce = _adminRequestNonce;
+    if (_lastApprovedNonceAdmin[msg.sender] == nonce) revert AlreadyApproved();
 
-        _lastApprovedNonceAdmin[msg.sender] = nonce;
-        R.approvals += 1;
+    _lastApprovedNonceAdmin[msg.sender] = nonce;
+    R.approvals += 1;
 
-        address last = address(0);
-        if (R.approvals == GUARDIAN_COUNT - 1) {
-            // find missing guardian to assign last-honest
-            for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
-                address g = activeGuardians[i];
-                if (_lastApprovedNonceAdmin[g] != nonce) {
-                    last = g;
-                    break;
-                }
-            }
-            if (last != address(0)) {
-                tempVeto.guardian = last;
-                tempVeto.expiry = block.timestamp + LAST_HONEST_VETO_WINDOW;
-                warning = true;
-                emit WarningRaised(R.approvals);
-                emit LastHonestAssigned(last, tempVeto.expiry);
+    // --- NEW LOGIC: START EXECUTION TIMELOCK AT THRESHOLD (5/7) ---
+    // If 5 approvals are reached, set the time when the proposal can be executed.
+    if (R.approvals == THRESHOLD) {
+        // R.readyToExecuteTimestamp is a new field in RecoveryRequest struct
+        // EXECUTION_TIMELOCK is a new constant (e.g., 4 hours)
+        R.readyToExecuteTimestamp = block.timestamp + EXECUTION_TIMELOCK;
+        
+        // Emit event to notify off-chain systems that execution timelock has started
+        // assuming this new event exists: event RecoveryReadyForExecution(uint256 indexed nonce, uint256 timelockExpiry);
+        emit RecoveryReadyForExecution(nonce, R.readyToExecuteTimestamp);
+    }
+    // ---------------------------------------------------------------------
+
+    address last = address(0);
+    if (R.approvals == GUARDIAN_COUNT - 1) { // 6/7
+        // find missing guardian to assign last-honest
+        for (uint256 i = 0; i < GUARDIAN_COUNT; ++i) {
+            address g = activeGuardians[i];
+            if (_lastApprovedNonceAdmin[g] != nonce) {
+                last = g;
+                break;
             }
         }
-
-        // handle unanimous approvals (7/7)
-        if (R.approvals >= GUARDIAN_COUNT) {
-            // lock and auto-activate standby per spec
-            locked = true;
-            emit AutoLocked();
-            // clear request before activating standby to avoid dangling request state
-            // emit a RecoveryReset after bumping nonce below
-            delete _adminRecovery;
-            tempVeto.guardian = address(0);
-            tempVeto.expiry = 0;
-            // activate standby; will clear standby array into active
-            _activateStandby();
-            // increment nonce to avoid re-approvals on the deleted request
-            _adminRequestNonce += 1;
-            emit RecoveryReset(_adminRequestNonce);
-            return;
+        if (last != address(0)) {
+            tempVeto.guardian = last;
+            tempVeto.expiry = block.timestamp + LAST_HONEST_VETO_WINDOW;
+            warning = true;
+            emit WarningRaised(R.approvals);
+            emit LastHonestAssigned(last, tempVeto.expiry);
         }
-
-        emit RecoveryApproved(msg.sender, R.approvals);
     }
 
-    function executeRecovery() external nonReentrant whenNotPaused {
-        RecoveryRequest storage R = _adminRecovery;
-
-        if (R.callTarget == address(0)) revert NoActiveRequest();
-        if (R.executed) revert AlreadyExecuted();
-        if (block.timestamp > R.deadline) revert RequestExpired();
-        if (R.approvals < THRESHOLD) revert ThresholdNotMet();
-
-        // Effects
-        R.executed = true;
+    // handle unanimous approvals (7/7)
+    if (R.approvals >= GUARDIAN_COUNT) {
+        // lock and auto-activate standby per spec
+        locked = true;
+        emit AutoLocked();
+        
+        delete _adminRecovery;
         tempVeto.guardian = address(0);
         tempVeto.expiry = 0;
-
-        // Interaction
-        (bool ok, bytes memory ret) = R.callTarget.call(R.callData);
-        if (!ok) {
-            // revert with custom error including returned bytes
-            revert CallFailed(ret);
-        }
-
-        emit RecoveryExecuted(R.proposed, R.callTarget);
-        delete _adminRecovery;
+        
+        _activateStandby();
+        
         _adminRequestNonce += 1;
         emit RecoveryReset(_adminRequestNonce);
+        return;
     }
+
+    emit RecoveryApproved(msg.sender, R.approvals);
+}
+
+function executeRecovery() external nonReentrant whenNotPaused {
+    RecoveryRequest storage R = _adminRecovery;
+
+    if (R.callTarget == address(0)) revert NoActiveRequest();
+    if (R.executed) revert AlreadyExecuted();
+    if (block.timestamp > R.deadline) revert RequestExpired();
+    if (R.approvals < THRESHOLD) revert ThresholdNotMet();
+
+    // --- EXECUTION TIMELOCK ENFORCEMENT (NEW LINE) ---
+    // The R.readyToExecuteTimestamp was set in approveRecovery() when R.approvals == THRESHOLD (5/7)
+    require(
+        block.timestamp >= R.readyToExecuteTimestamp, 
+        "DRS: Execution Timelock not expired"
+    );
+    // --------------------------------------------------
+
+    // Effects
+    R.executed = true;
+    tempVeto.guardian = address(0);
+    tempVeto.expiry = 0;
+
+    // Interaction
+    (bool ok, bytes memory ret) = R.callTarget.call(R.callData);
+    if (!ok) {
+        // revert with custom error including returned bytes
+        revert CallFailed(ret);
+    }
+
+    emit RecoveryExecuted(R.proposed, R.callTarget);
+    delete _adminRecovery;
+    _adminRequestNonce += 1;
+    emit RecoveryReset(_adminRequestNonce);
+}
+    
 
     function lastHonestHaltAndPromote() external whenNotPaused onlyActiveG {
         if (tempVeto.guardian == address(0)) revert NoActiveRequest();
