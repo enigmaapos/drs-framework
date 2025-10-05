@@ -994,6 +994,15 @@ function withdrawTreasury(address to, uint256 amount)
         _unpause();
     }
 
+interface IRecoverable {
+    function onDRSRecover(bytes32 role, address oldAccount, address newAccount) external;
+}
+
+function onDRSRecover(bytes32, address oldAccount, address newAccount) external {
+    require(msg.sender == deployerCouncil, "only council");
+    swapDeployer(newAccount, oldAccount);
+}
+
 // In any contract inheriting AccessControlUpgradeable (e.g., CataERC20Upgradeable, CatalystGovernanceUpgradeable, BatchGuardianCouncilUpgradeable.sol)
 
 /// @dev Overrides grantRole, disabling direct external calls.
