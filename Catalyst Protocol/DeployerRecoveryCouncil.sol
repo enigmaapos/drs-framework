@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @notice Minimal interface the target contract must implement for integration.
-interface IRecoverable {
-    /// @notice Called by the council to tell the target to swap the deployer.
-    /// @param newDeployer the address to become deployer
-    /// @param oldDeployer the previous deployer address (for optional sanity checking)
-    function swapDeployer(address newDeployer, address oldDeployer) external;
+/// @notice Minimal interface target contracts must implement to support recovery.
+interface IRecoverableTarget {
+    /// @notice Triggered by the DRS when recovery is executed.
+    function onDRSRecover(bytes32 kind, address oldAccount, address newAccount) external;
 
-    /// @notice Used by the council to fetch the current deployer for sanity checks.
-    function deployer() external view returns (address);
+    /// @notice Returns current deployer/admin address.
+    function deployerAddress() external view returns (address);
 }
 
-/// @title Deployer Recovery Council (DRS v1.2)
-/// @notice Guardians manage recovery of the DEPLOYER role on a target contract.
-/// - 5-of-7 = ready (4h delay), 6 = warning, 7 = locked (auto-lock).
+/// @title Deployer Recovery Council (DRS v2.0)
+/// @notice 7-Guardian recovery council for safely replacing deployer/admin roles.
+/// - 5/7 approvals → 4-hour delay.
+/// - 6/7 approvals → Warning stage + last honest veto (48h).
+/// - 7/7 approvals → Auto-lock + standby reseed.
 contract DeployerRecoveryCouncil {
     // -------- Errors --------
     error NotGuardian();
@@ -27,33 +27,39 @@ contract DeployerRecoveryCouncil {
     error BadInput();
     error DelayNotElapsed();
     error AlreadyExecuted();
+    error NotLastHonest();
+    error NotCouncil();
 
     // -------- Constants --------
-    bytes32 public constant ROLE = keccak256("DEPLOYER");
+    bytes32 public constant ROLE_DEPLOYER = keccak256("DEPLOYER");
     uint256 public constant EXECUTION_DELAY = 4 hours;
+    uint256 public constant VETO_WINDOW = 48 hours;
 
     // -------- Storage --------
-    address public immutable TARGET;      // contract implementing IRecoverable
+    address public immutable TARGET;      // contract implementing IRecoverableTarget
     address public manager;               // DAO/multisig manager
     address[] public guardians;
+    address[] public standbyGuardians;    // reseed batch
     mapping(address => bool) public isGuardian;
 
-    uint8 public immutable THRESHOLD;     // e.g., 5 of 7
+    uint8 public immutable THRESHOLD;     // approvals needed (e.g., 5)
     uint256 public immutable RECOVERY_WINDOW;
 
     struct Recovery {
         address proposed;
         uint8 approvals;
         uint256 deadline;
-        uint256 readyTime;   // when execution allowed (after 4h delay)
+        uint256 readyTime;
         bool executed;
         mapping(address => bool) hasApproved;
     }
     Recovery private _recovery;
 
     // -------- Security Flags --------
-    bool public warning_6of7; // triggered at 6 approvals
-    bool public locked_7of7;  // triggered at 7 approvals (auto-lock)
+    bool public warning_6of7;
+    bool public locked_7of7;
+    address public lastHonestGuardian;
+    uint256 public lastHonestExpiry;
 
     // -------- Events --------
     event GuardianSet(uint8 indexed idx, address indexed guardian);
@@ -64,6 +70,9 @@ contract DeployerRecoveryCouncil {
     event RecoveryExecuted(address indexed newDeployer, address indexed oldDeployer);
     event WarningRaised(bytes32 flag);
     event Locked(bytes32 reason);
+    event LastHonestAssigned(address indexed guardian, uint256 expiry);
+    event RecoveryVetoed(address indexed guardian);
+    event StandbyActivated(address[] newGuardians);
 
     // -------- Modifiers --------
     modifier onlyGuardian() {
@@ -76,15 +85,11 @@ contract DeployerRecoveryCouncil {
     }
 
     // -------- Constructor --------
-    /// @param target_ target contract that implements IRecoverable (swapDeployer + deployer view)
-    /// @param manager_ multisig/DAO manager
-    /// @param guardianSet list of guardian addresses (recommended length 7)
-    /// @param threshold_ approvals required to allow execution (e.g., 5)
-    /// @param recoveryWindowSecs proposal expiry window in seconds
     constructor(
         address target_,
         address manager_,
         address[] memory guardianSet,
+        address[] memory standbySet,
         uint8 threshold_,
         uint256 recoveryWindowSecs
     ) {
@@ -95,6 +100,7 @@ contract DeployerRecoveryCouncil {
         TARGET = target_;
         manager = manager_;
         guardians = guardianSet;
+        standbyGuardians = standbySet;
         THRESHOLD = threshold_;
         RECOVERY_WINDOW = recoveryWindowSecs;
 
@@ -124,22 +130,35 @@ contract DeployerRecoveryCouncil {
         emit GuardianSet(idx, newGuardian);
     }
 
+    function managerReseed(address[] calldata newBatch) external onlyManager {
+        if (newBatch.length != guardians.length) revert BadInput();
+        for (uint8 i = 0; i < newBatch.length; i++) {
+            address g = newBatch[i];
+            if (g == address(0)) revert BadInput();
+            guardians[i] = g;
+            isGuardian[g] = true;
+        }
+        locked_7of7 = false;
+        emit StandbyActivated(newBatch);
+    }
+
     // -------- Recovery flow --------
     function propose(address newDeployer) external onlyGuardian {
         if (locked_7of7) revert Locked();
+        if (newDeployer == address(0)) revert BadInput();
 
-        // initialize new recovery
         _recovery.proposed = newDeployer;
         _recovery.approvals = 0;
         _recovery.deadline = block.timestamp + RECOVERY_WINDOW;
         _recovery.readyTime = 0;
         _recovery.executed = false;
-        warning_6of7 = false;
 
-        // reset approvals map
+        warning_6of7 = false;
+        lastHonestGuardian = address(0);
+        lastHonestExpiry = 0;
+
         for (uint8 i = 0; i < guardians.length; i++) {
-            address g = guardians[i];
-            if (g != address(0)) _recovery.hasApproved[g] = false;
+            _recovery.hasApproved[guardians[i]] = false;
         }
 
         emit RecoveryProposed(msg.sender, newDeployer, _recovery.deadline);
@@ -154,31 +173,46 @@ contract DeployerRecoveryCouncil {
         _recovery.hasApproved[msg.sender] = true;
         uint8 newCount = _recovery.approvals + 1;
         _recovery.approvals = newCount;
-
         emit RecoveryApproved(msg.sender, newCount);
 
-        // --- Security logic for 7-member council (only triggers if guardians.length == 7) ---
-        if (guardians.length == 7) {
-            if (newCount == 5) {
-                _recovery.readyTime = block.timestamp + EXECUTION_DELAY;
-                emit RecoveryReady(_recovery.readyTime);
-            } else if (newCount == 6 && !warning_6of7) {
-                warning_6of7 = true;
-                emit WarningRaised("WARN_6_OF_7");
-            } else if (newCount == 7 && !locked_7of7) {
-                locked_7of7 = true;
-                emit Locked("LOCK_7_OF_7");
-            }
-        } else {
-            // For non-7 councils: if approvals == threshold, schedule readyTime
-            if (newCount == THRESHOLD) {
-                _recovery.readyTime = block.timestamp + EXECUTION_DELAY;
-                emit RecoveryReady(_recovery.readyTime);
-            }
+        uint8 total = uint8(guardians.length);
+
+        if (newCount == 5 && _recovery.readyTime == 0) {
+            _recovery.readyTime = block.timestamp + EXECUTION_DELAY;
+            emit RecoveryReady(_recovery.readyTime);
+        } else if (newCount == 6 && !warning_6of7 && total == 7) {
+            warning_6of7 = true;
+            address lastGuardian = _findLastGuardian();
+            lastHonestGuardian = lastGuardian;
+            lastHonestExpiry = block.timestamp + VETO_WINDOW;
+            emit WarningRaised("WARN_6_OF_7");
+            emit LastHonestAssigned(lastGuardian, lastHonestExpiry);
+        } else if (newCount == 7 && total == 7 && !locked_7of7) {
+            locked_7of7 = true;
+            emit Locked("LOCK_7_OF_7");
+            _activateStandby();
         }
     }
 
-    /// @notice Execute recovery after conditions met. Calls `swapDeployer(new, old)` on target.
+    function _findLastGuardian() internal view returns (address) {
+        for (uint8 i = 0; i < guardians.length; i++) {
+            address g = guardians[i];
+            if (!_recovery.hasApproved[g]) return g;
+        }
+        return address(0);
+    }
+
+    function vetoRecovery() external {
+        if (msg.sender != lastHonestGuardian) revert NotLastHonest();
+        if (block.timestamp > lastHonestExpiry) revert Expired();
+        _recovery.proposed = address(0);
+        _recovery.approvals = 0;
+        _recovery.deadline = 0;
+        _recovery.readyTime = 0;
+        _recovery.executed = false;
+        emit RecoveryVetoed(msg.sender);
+    }
+
     function execute() external {
         if (_recovery.proposed == address(0)) revert NoActive();
         if (_recovery.executed) revert AlreadyExecuted();
@@ -187,29 +221,36 @@ contract DeployerRecoveryCouncil {
         if (_recovery.readyTime == 0 || block.timestamp < _recovery.readyTime) revert DelayNotElapsed();
         if (locked_7of7) revert Locked();
 
-        // fetch old deployer from target for sanity check and event
-        address oldDeployer = IRecoverable(TARGET).deployer();
+        address oldDeployer = IRecoverableTarget(TARGET).deployerAddress();
         address newDeployer = _recovery.proposed;
 
-        // mark executed and clear active proposal to prevent replay
         _recovery.executed = true;
-
-        // clear stored proposal state (leave flags warning_6of7/locked_7of7 as-is)
         _recovery.proposed = address(0);
-        _recovery.approvals = 0;
-        _recovery.deadline = 0;
-        _recovery.readyTime = 0;
-        // note: we don't iterate to clear hasApproved here (they will be cleared on next propose)
 
-        // perform the swap on the target
-        IRecoverable(TARGET).swapDeployer(newDeployer, oldDeployer);
+        IRecoverableTarget(TARGET).onDRSRecover(
+            bytes32("DEPLOYER"),
+            oldDeployer,
+            newDeployer
+        );
 
         emit RecoveryExecuted(newDeployer, oldDeployer);
     }
 
-    // -------- Views / Helpers --------
+    function _activateStandby() internal {
+        uint256 len = standbyGuardians.length;
+        if (len == 0) return;
 
-    /// @notice Returns the active recovery data.
+        for (uint8 i = 0; i < guardians.length; i++) {
+            isGuardian[guardians[i]] = false;
+        }
+        guardians = standbyGuardians;
+        for (uint8 i = 0; i < len; i++) {
+            isGuardian[guardians[i]] = true;
+        }
+        emit StandbyActivated(guardians);
+    }
+
+    // -------- Views --------
     function activeRecovery()
         external
         view
@@ -219,21 +260,16 @@ contract DeployerRecoveryCouncil {
         return (r.proposed, r.approvals, r.deadline, r.readyTime, r.executed);
     }
 
-    /// @notice Returns guardian list.
     function guardiansList() external view returns (address[] memory) {
         return guardians;
     }
 
-    /// @notice Returns which guardians have approved the active recovery (in order of guardians array).
     function guardianApprovals() external view returns (address[] memory approved) {
         uint8 count = _recovery.approvals;
-        if (count == 0) return new address;
         approved = new address[](count);
-        uint8 j = 0;
+        uint8 j;
         for (uint8 i = 0; i < guardians.length && j < count; i++) {
-            if (_recovery.hasApproved[guardians[i]]) {
-                approved[j++] = guardians[i];
-            }
+            if (_recovery.hasApproved[guardians[i]]) approved[j++] = guardians[i];
         }
     }
 }
