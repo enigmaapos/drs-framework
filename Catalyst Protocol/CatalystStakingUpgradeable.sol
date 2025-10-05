@@ -974,10 +974,6 @@ function withdrawTreasury(address to, uint256 amount)
         _unpause();
     }
 
-// ✅ keep this interface
-interface IRecoverable {
-    function onDRSRecover(bytes32 role, address oldAccount, address newAccount) external;
-}
 
 // ✅ keep this function
 function onDRSRecover(bytes32, address oldAccount, address newAccount) external {
