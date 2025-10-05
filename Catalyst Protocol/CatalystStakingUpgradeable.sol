@@ -974,11 +974,6 @@ function withdrawTreasury(address to, uint256 amount)
         _unpause();
     }
 
-
-error OnlyCouncil();
-error ZeroAddr();
-error Mismatch();
-
 function onDRSRecover(bytes32, address oldAccount, address newAccount) external {
     if (msg.sender != deployerCouncil) revert OnlyCouncil();
     if (newAccount == address(0)) revert ZeroAddr();
