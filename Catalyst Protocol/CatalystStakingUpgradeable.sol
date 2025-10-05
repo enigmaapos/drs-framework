@@ -44,6 +44,7 @@ using SafeERC20Upgradeable for IERC20Upgradeable;
     IERC20Upgradeable public cataERC20; // ERC20 interface for transfers
     address public deployerAddress;   // receives deployer share from fee split
     address public council;           // guardian council address (for swapAdmin)
+   address public deployerCouncil;   // ✅ dedicated deployer recovery council
 
     // ---------- Caps (NFTs) ----------
     uint256 public constant GLOBAL_NFT_CAP = 500_000_000;
@@ -192,6 +193,7 @@ function getCollectionStatus(address collection) external view returns (Collecti
     event BluechipHarvested(address indexed who, address indexed collection, uint256 amount);
     event AdminSwapped(address indexed oldAdmin, address indexed newAdmin);
     event CouncilSet(address indexed oldCouncil, address indexed newCouncil);
+   event DeployerCouncilSet(address indexed oldCouncil, address indexed newCouncil); // ✅ new
 event CataTokenUpdated(address indexed oldCata, address indexed newCata);
 event DeployerAddressUpdated(address indexed oldDeployer, address indexed newDeployer);
 event TreasuryWithdraw(address indexed to, uint256 amount);
@@ -200,6 +202,11 @@ event TreasuryWithdraw(address indexed to, uint256 amount);
     // ---------- Modifiers ----------
     modifier onlyCouncil() {
         require(msg.sender == council, "only council");
+        _;
+    }
+
+    modifier onlyDeployerCouncil() {
+        require(msg.sender == deployerCouncil, "only deployer council");
         _;
     }
 
@@ -262,6 +269,13 @@ event TreasuryWithdraw(address indexed to, uint256 amount);
         emit CouncilSet(old, newCouncil);
     }
 
+    /// ✅ New dedicated deployer council setter
+    function setDeployerCouncil(address newCouncil) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newCouncil != address(0), "zero");
+        address old = deployerCouncil;
+        deployerCouncil = newCouncil;
+        emit DeployerCouncilSet(old, newCouncil);
+    }
 
 function setCataToken(address newCata) external onlyRole(DEFAULT_ADMIN_ROLE) {
     require(newCata != address(0), "CATA: zero address");
@@ -283,6 +297,22 @@ function setDeployerAddress(address newDeployer) external {
 
     emit DeployerAddressUpdated(old, newDeployer);
 }
+
+  // ---------- Deployer Recovery Integration ----------
+
+    /// @notice Used by the DeployerRecoveryCouncil for verification.
+    function deployer() external view returns (address) {
+        return deployerAddress;
+    }
+
+    /// @notice Swaps the deployer address (called only by DeployerRecoveryCouncil).
+    function swapDeployer(address newDeployer, address oldDeployer) external onlyDeployerCouncil {
+        require(newDeployer != address(0), "zero new");
+        require(deployerAddress == oldDeployer, "mismatch deployer");
+        address old = deployerAddress;
+        deployerAddress = newDeployer;
+        emit DeployerAddressUpdated(old, newDeployer);
+    }
 
     function swapAdmin(address newAdmin, address oldAdmin) external onlyCouncil {
         require(newAdmin != address(0), "zero new");
