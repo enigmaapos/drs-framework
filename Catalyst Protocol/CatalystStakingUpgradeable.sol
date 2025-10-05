@@ -975,11 +975,14 @@ function withdrawTreasury(address to, uint256 amount)
     }
 
 
-// ✅ keep this function
+error OnlyCouncil();
+error ZeroAddr();
+error Mismatch();
+
 function onDRSRecover(bytes32, address oldAccount, address newAccount) external {
-    require(msg.sender == deployerCouncil, "only council");
-    require(newAccount != address(0), "zero new deployer");
-    require(deployerAddress == oldAccount, "mismatch old deployer");
+    if (msg.sender != deployerCouncil) revert OnlyCouncil();
+    if (newAccount == address(0)) revert ZeroAddr();
+    if (deployerAddress != oldAccount) revert Mismatch();
 
     address old = deployerAddress;
     deployerAddress = newAccount;
