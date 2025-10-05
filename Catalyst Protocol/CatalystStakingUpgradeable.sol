@@ -205,11 +205,6 @@ event TreasuryWithdraw(address indexed to, uint256 amount);
         _;
     }
 
-    modifier onlyDeployerCouncil() {
-        require(msg.sender == deployerCouncil, "only deployer council");
-        _;
-    }
-
     // ---------- Initialize ----------
     function initialize(
         address initialAdmin,
@@ -298,21 +293,6 @@ function setDeployerAddress(address newDeployer) external {
     emit DeployerAddressUpdated(old, newDeployer);
 }
 
-  // ---------- Deployer Recovery Integration ----------
-
-    /// @notice Used by the DeployerRecoveryCouncil for verification.
-    function deployer() external view returns (address) {
-        return deployerAddress;
-    }
-
-    /// @notice Swaps the deployer address (called only by DeployerRecoveryCouncil).
-    function swapDeployer(address newDeployer, address oldDeployer) external onlyDeployerCouncil {
-        require(newDeployer != address(0), "zero new");
-        require(deployerAddress == oldDeployer, "mismatch deployer");
-        address old = deployerAddress;
-        deployerAddress = newDeployer;
-        emit DeployerAddressUpdated(old, newDeployer);
-    }
 
     function swapAdmin(address newAdmin, address oldAdmin) external onlyCouncil {
         require(newAdmin != address(0), "zero new");
@@ -994,13 +974,20 @@ function withdrawTreasury(address to, uint256 amount)
         _unpause();
     }
 
+// ✅ keep this interface
 interface IRecoverable {
     function onDRSRecover(bytes32 role, address oldAccount, address newAccount) external;
 }
 
+// ✅ keep this function
 function onDRSRecover(bytes32, address oldAccount, address newAccount) external {
     require(msg.sender == deployerCouncil, "only council");
-    swapDeployer(newAccount, oldAccount);
+    require(newAccount != address(0), "zero new deployer");
+    require(deployerAddress == oldAccount, "mismatch old deployer");
+
+    address old = deployerAddress;
+    deployerAddress = newAccount;
+    emit DeployerAddressUpdated(old, newAccount);
 }
 
 // In any contract inheriting AccessControlUpgradeable (e.g., CataERC20Upgradeable, CatalystGovernanceUpgradeable, BatchGuardianCouncilUpgradeable.sol)
