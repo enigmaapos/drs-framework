@@ -22,7 +22,7 @@ contract DeployerRecoveryCouncil {
     error NoActive();
     error Expired();
     error ThresholdNotReached();
-    error Locked();
+    error LockedError(); // renamed to avoid collision with event
     error NotManager();
     error BadInput();
     error DelayNotElapsed();
@@ -144,7 +144,7 @@ contract DeployerRecoveryCouncil {
 
     // -------- Recovery flow --------
     function propose(address newDeployer) external onlyGuardian {
-        if (locked_7of7) revert Locked();
+        if (locked_7of7) revert LockedError();
         if (newDeployer == address(0)) revert BadInput();
 
         _recovery.proposed = newDeployer;
@@ -168,7 +168,7 @@ contract DeployerRecoveryCouncil {
         if (_recovery.proposed == address(0)) revert NoActive();
         if (block.timestamp > _recovery.deadline) revert Expired();
         if (_recovery.hasApproved[msg.sender]) revert AlreadyApproved();
-        if (locked_7of7) revert Locked();
+        if (locked_7of7) revert LockedError();
 
         _recovery.hasApproved[msg.sender] = true;
         uint8 newCount = _recovery.approvals + 1;
@@ -185,11 +185,11 @@ contract DeployerRecoveryCouncil {
             address lastGuardian = _findLastGuardian();
             lastHonestGuardian = lastGuardian;
             lastHonestExpiry = block.timestamp + VETO_WINDOW;
-            emit WarningRaised("WARN_6_OF_7");
+            emit WarningRaised(bytes32("WARN_6_OF_7"));
             emit LastHonestAssigned(lastGuardian, lastHonestExpiry);
         } else if (newCount == 7 && total == 7 && !locked_7of7) {
             locked_7of7 = true;
-            emit Locked("LOCK_7_OF_7");
+            emit Locked(bytes32("LOCK_7_OF_7"));
             _activateStandby();
         }
     }
@@ -219,7 +219,7 @@ contract DeployerRecoveryCouncil {
         if (block.timestamp > _recovery.deadline) revert Expired();
         if (_recovery.approvals < THRESHOLD) revert ThresholdNotReached();
         if (_recovery.readyTime == 0 || block.timestamp < _recovery.readyTime) revert DelayNotElapsed();
-        if (locked_7of7) revert Locked();
+        if (locked_7of7) revert LockedError();
 
         address oldDeployer = IRecoverableTarget(TARGET).deployerAddress();
         address newDeployer = _recovery.proposed;
