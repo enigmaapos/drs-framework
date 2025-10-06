@@ -51,7 +51,7 @@ contract CatalystBonusExtension {
     {
         ICatalystCore C = ICatalystCore(core);
         uint256 total = C.participatingWalletsLength();
-        if (total == 0) return (new address (0), new uint256 (0));
+        if (total == 0) return (new address , new uint256 );
         if (total > MAX_PARTICIPANTS_LIMIT) total = MAX_PARTICIPANTS_LIMIT;
 
         uint256 topCount = (total * TOP_BURNER_PERCENT) / 100;
