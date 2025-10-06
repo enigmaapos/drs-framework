@@ -984,7 +984,7 @@ function _applyTaxAndSplit(address user, uint256 amount, address collection) int
 
 function _getTopBurners(uint256 topCount) internal view returns (address[] memory topBurners) {
     uint256 n = participatingWallets.length;
-    if (n == 0) return new address (0);
+    if (n == 0) return new address[](0);
     if (n > MAX_PARTICIPANTS_LIMIT) revert TooManyParticipants();
 
     // Copy to temporary arrays for sorting (safe under limit)
