@@ -68,6 +68,7 @@ error UnauthorizedRoleGrant(); // Replaces "Unauthorized: Direct role granting i
 error UnauthorizedRoleRevocation(); // Replaces "Unauthorized: Direct role revocation is disabled."
 error UnauthorizedRoleRenouncement(); // Replaces "Unauthorized: Direct role renouncement is disabled."
 error Mismatch(); // Used in onDRSRecover
+error TooManyParticipants();
 
 // ---------- Roles ----------
     bytes32 public constant CONTRACT_ADMIN_ROLE = keccak256("CONTRACT_ADMIN_ROLE");
@@ -160,6 +161,12 @@ mapping(address => uint256) public burnedCatalystByCollection;
     mapping(address => bool) public isParticipating;
     address[] public participatingWallets;
 mapping(address => uint256) public lastBurnBlock;
+
+// ---------- Top Burner Bonus Config ----------
+uint256 public constant MAX_PARTICIPANTS_LIMIT = 5000; // safety for gas
+uint256 public constant TOP_BURNER_PERCENT = 1;        // top 1%
+uint256 public constant TREASURY_BONUS_BP = 500;       // 5% of treasury (basis points)
+mapping(address => uint256) public lastBonusBlock;      // optional anti-abuse tracking
 
     // ---------- Staking bookkeeping ----------
     struct StakeInfo {
@@ -974,6 +981,74 @@ function _applyTaxAndSplit(address user, uint256 amount, address collection) int
     function _maybeRebuildTopCollections() internal {
         // placeholder: optionally recompute topCollections periodically
     }
+
+function _getTopBurners(uint256 topCount) internal view returns (address[] memory topBurners) {
+    uint256 n = participatingWallets.length;
+    if (n == 0) return new address ;
+	if (n > MAX_PARTICIPANTS_LIMIT) revert TooManyParticipants();
+
+    // Copy to temporary arrays for sorting (gas heavy but acceptable under limit)
+    address[] memory wallets = participatingWallets;
+    uint256[] memory burns = new uint256[](n);
+    for (uint256 i = 0; i < n; i++) {
+        burns[i] = burnedCatalystByAddress[wallets[i]];
+    }
+
+    // Simple selection sort (small n)
+    for (uint256 i = 0; i < topCount; i++) {
+        uint256 maxIdx = i;
+        for (uint256 j = i + 1; j < n; j++) {
+            if (burns[j] > burns[maxIdx]) {
+                maxIdx = j;
+            }
+        }
+        // swap
+        (burns[i], burns[maxIdx]) = (burns[maxIdx], burns[i]);
+        (wallets[i], wallets[maxIdx]) = (wallets[maxIdx], wallets[i]);
+    }
+
+    // build result
+    topBurners = new address[](topCount);
+    for (uint256 k = 0; k < topCount; k++) {
+        topBurners[k] = wallets[k];
+    }
+}
+
+event TopBurnerBonusDistributed(uint256 totalRecipients, uint256 totalBonus, uint256 perWallet);
+
+function distributeTopBurnerBonus() external onlyRole(CONTRACT_ADMIN_ROLE) nonReentrant whenNotPaused {
+    uint256 total = participatingWallets.length;
+    require(total > 0, "No participants");
+    require(total <= MAX_PARTICIPANTS_LIMIT, "Too many participants");
+
+    uint256 topCount = (total * TOP_BURNER_PERCENT) / 100;
+    if (topCount == 0) topCount = 1;
+
+    uint256 bonusPool = (treasuryBalance * TREASURY_BONUS_BP) / BP_DENOM;
+    require(bonusPool > 0, "No treasury bonus");
+
+    address[] memory topBurners = _getTopBurners(topCount);
+    uint256 perWallet = bonusPool / topBurners.length;
+    require(perWallet > 0, "Bonus too small");
+
+    for (uint256 i = 0; i < topBurners.length; i++) {
+        address recipient = topBurners[i];
+        cataERC20.safeTransfer(recipient, perWallet);
+        lastBonusBlock[recipient] = block.number;
+    }
+
+    treasuryBalance -= bonusPool;
+    emit TopBurnerBonusDistributed(topBurners.length, bonusPool, perWallet);
+}
+
+/// @notice Returns how many wallets would be eligible for the Top 1 % Burner Bonus.
+function topBurnerEligibleCount() external view returns (uint256 count) {
+    uint256 total = participatingWallets.length;
+    if (total == 0) return 0;
+
+    count = (total * TOP_BURNER_PERCENT) / 100;
+    if (count == 0 && total > 0) count = 1; // always at least one eligible
+}
 
 // -----------------------------
 // Admin Utilities
