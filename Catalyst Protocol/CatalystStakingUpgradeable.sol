@@ -985,29 +985,32 @@ function _applyTaxAndSplit(address user, uint256 amount, address collection) int
 function _getTopBurners(uint256 topCount) internal view returns (address[] memory topBurners) {
     uint256 n = participatingWallets.length;
     if (n == 0) return new address ;
-	if (n > MAX_PARTICIPANTS_LIMIT) revert TooManyParticipants();
+    if (n > MAX_PARTICIPANTS_LIMIT) revert TooManyParticipants();
 
-    // Copy to temporary arrays for sorting (gas heavy but acceptable under limit)
-    address[] memory wallets = participatingWallets;
+    // Copy to temporary arrays for sorting (safe under limit)
+    address[] memory wallets = new address[](n);
     uint256[] memory burns = new uint256[](n);
+
     for (uint256 i = 0; i < n; i++) {
+        wallets[i] = participatingWallets[i];
         burns[i] = burnedCatalystByAddress[wallets[i]];
     }
 
-    // Simple selection sort (small n)
-    for (uint256 i = 0; i < topCount; i++) {
+    // Simple selection sort to get top burners
+    for (uint256 i = 0; i < topCount && i < n; i++) {
         uint256 maxIdx = i;
         for (uint256 j = i + 1; j < n; j++) {
             if (burns[j] > burns[maxIdx]) {
                 maxIdx = j;
             }
         }
-        // swap
+        // Swap
         (burns[i], burns[maxIdx]) = (burns[maxIdx], burns[i]);
         (wallets[i], wallets[maxIdx]) = (wallets[maxIdx], wallets[i]);
     }
 
-    // build result
+    // Build result array
+    if (topCount > n) topCount = n;
     topBurners = new address[](topCount);
     for (uint256 k = 0; k < topCount; k++) {
         topBurners[k] = wallets[k];
