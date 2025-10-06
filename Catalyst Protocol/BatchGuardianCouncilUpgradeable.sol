@@ -466,6 +466,10 @@ function executeRecovery() external nonReentrant whenNotPaused {
         return warning;
     }
 
+function getRecoveryReadyToExecuteTimestamp() external view returns (uint256) {
+    return _adminRecovery.readyToExecuteTimestamp;
+}
+
     // External tuple getter for the admin recovery
     function getRecoveryState()
         external
