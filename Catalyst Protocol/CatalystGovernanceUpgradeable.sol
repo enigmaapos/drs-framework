@@ -15,8 +15,6 @@ interface IBatchGuardianCouncil {
     function proposeNewDAO(address newDAO) external;
     function commitNewDAO() external;
     function daoClearLockAndWarning() external;
-
-    /// @notice UUPS upgrade entrypoint on the council proxy/implementation hosting contract.
     function upgradeTo(address newImplementation) external;
 }
 
@@ -27,7 +25,6 @@ interface ICatalystStaking {
 }
 
 /// @title Catalyst Governance (Upgradeable) with Council Reseed + Real Voting Weight
-/// @notice Generic governance with specialized council management proposals.
 contract CatalystGovernanceUpgradeable is
     Initializable,
     AccessControlUpgradeable,
@@ -121,6 +118,11 @@ contract CatalystGovernanceUpgradeable is
     uint256 public unstakeBurnFee;
     uint256 public collectionRegistrationFee;
 
+    // --- Timelock ---
+    // 4 hours delay before an eligible proposal can be executed by anyone after being queued
+    uint256 public constant TIMELOCK_DELAY = 4 hours;
+    mapping(bytes32 => uint256) public proposalReadyTime;
+
     // --- Events ---
     event ProposalCreated(
         bytes32 indexed id,
@@ -133,6 +135,7 @@ contract CatalystGovernanceUpgradeable is
         uint256 endBlock
     );
     event VoteCast(bytes32 indexed id, address indexed voter, uint256 weightScaled, address attributedCollection);
+    event ProposalQueued(bytes32 indexed id, uint256 readyTime);
     event ProposalExecuted(bytes32 indexed id, uint256 newValue);
     event VotingParamUpdated(uint8 indexed param, uint256 oldValue, uint256 newValue);
     event BaseRewardRateUpdated(uint256 oldValue, uint256 newValue);
@@ -196,7 +199,6 @@ contract CatalystGovernanceUpgradeable is
     // -------------------------
     // Allow the council to update/rotate the guardian contract (role transfer)
     // -------------------------
-    /// @notice Update the guardian council address (transfers DEFAULT_ADMIN_ROLE & CONTRACT_ADMIN_ROLE)
     function updateGuardianCouncil(address newCouncil) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newCouncil != address(0), "zero");
         address old = council;
@@ -358,7 +360,7 @@ contract CatalystGovernanceUpgradeable is
 
         emit ProposalCreated(id, ProposalType.COUNCIL_PROPOSE_STANDBY, 0, council, msg.sender, 0, p.startBlock, p.endBlock);
     }
-    
+
     /// @notice Specialized proposer for proposing to commit a pending standby batch.
     function proposeCouncilCommitStandby() external returns (bytes32 id) {
         if (council == address(0)) revert ZeroAddress();
@@ -386,7 +388,7 @@ contract CatalystGovernanceUpgradeable is
 
         emit ProposalCreated(id, ProposalType.COUNCIL_COMMIT_STANDBY, 0, council, msg.sender, 0, p.startBlock, p.endBlock);
     }
-    
+
     /// @notice Specialized proposer for proposing to activate the standby batch.
     function proposeCouncilActivateStandby() external returns (bytes32 id) {
         if (council == address(0)) revert ZeroAddress();
@@ -444,7 +446,7 @@ contract CatalystGovernanceUpgradeable is
 
         emit ProposalCreated(id, ProposalType.COUNCIL_PROPOSE_NEW_DAO, 0, council, msg.sender, 0, p.startBlock, p.endBlock);
     }
-    
+
     /// @notice Specialized proposer for proposing to commit the new DAO.
     function proposeCouncilCommitNewDAO() external returns (bytes32 id) {
         if (council == address(0)) revert ZeroAddress();
@@ -562,9 +564,29 @@ contract CatalystGovernanceUpgradeable is
     }
 
     // -------------------------
-    // Execute
+    // Queue (start timelock)
     // -------------------------
-    /// @notice Execute passed proposal.
+    /// @notice Queue a passed proposal for execution (starts timelock). Anyone can call.
+    function queueProposal(bytes32 id) external nonReentrant {
+        Proposal storage p = proposals[id];
+        require(p.startBlock != 0, "not found");
+        require(block.number > p.endBlock, "voting");
+        require(!p.executed, "executed");
+        require(p.votesScaled >= minVotesRequiredScaled, "quorum");
+
+        // must not already be queued
+        require(proposalReadyTime[id] == 0, "already queued");
+
+        uint256 ready = block.timestamp + TIMELOCK_DELAY;
+        proposalReadyTime[id] = ready;
+
+        emit ProposalQueued(id, ready);
+    }
+
+    // -------------------------
+    // Execute (after timelock)
+    // -------------------------
+    /// @notice Execute queued proposal after timelock expired.
     function executeProposal(bytes32 id) external nonReentrant {
         Proposal storage p = proposals[id];
         require(p.startBlock != 0, "not found");
@@ -572,8 +594,44 @@ contract CatalystGovernanceUpgradeable is
         require(!p.executed, "executed");
         require(p.votesScaled >= minVotesRequiredScaled, "quorum");
 
+        uint256 ready = proposalReadyTime[id];
+        require(ready != 0, "not queued");
+        require(block.timestamp >= ready, "timelock");
+
         // mark executed first (reentrancy safe because of nonReentrant)
         p.executed = true;
+
+        _executeAction(id);
+
+        // cleanup queued time
+        delete proposalReadyTime[id];
+
+        emit ProposalExecuted(id, p.newValue);
+    }
+
+    /// @notice Emergency immediate execution by council (bypasses timelock). Use sparingly.
+    function emergencyExecuteProposal(bytes32 id) external onlyCouncil nonReentrant {
+        Proposal storage p = proposals[id];
+        require(p.startBlock != 0, "not found");
+        require(block.number > p.endBlock, "voting");
+        require(!p.executed, "executed");
+        require(p.votesScaled >= minVotesRequiredScaled, "quorum");
+
+        p.executed = true;
+        _executeAction(id);
+
+        // cleanup any queued ready time
+        if (proposalReadyTime[id] != 0) delete proposalReadyTime[id];
+
+        emit ProposalExecuted(id, p.newValue);
+    }
+
+    // -------------------------
+    // Internal: execution core (refactored)
+    // -------------------------
+    /// @dev Internal: performs the action for a passed proposal. Assumes caller set p.executed = true.
+    function _executeAction(bytes32 id) internal {
+        Proposal storage p = proposals[id];
 
         if (p.pType == ProposalType.BASE_REWARD) {
             uint256 old = baseRewardRate;
@@ -688,8 +746,6 @@ contract CatalystGovernanceUpgradeable is
             address newImpl = abi.decode(payload, (address));
             require(newImpl != address(0), "zero address");
 
-            // The governance contract must be DAO_ROLE on the council so that
-            // _authorizeUpgrade on the council allows this call.
             try IBatchGuardianCouncil(council).upgradeTo(newImpl) {
                 emit CouncilUpgraded(id, council, newImpl);
                 delete proposalPayloads[id];
@@ -700,8 +756,6 @@ contract CatalystGovernanceUpgradeable is
         } else {
             revert BadParam();
         }
-
-        emit ProposalExecuted(id, p.newValue);
     }
 
     // -------------------------
@@ -709,7 +763,7 @@ contract CatalystGovernanceUpgradeable is
     // -------------------------
     function getProposalInfo(bytes32 id) external view returns (ProposalInfo memory) {
         Proposal memory p = proposals[id];
-        
+
         return ProposalInfo(
             p.pType,
             p.paramTarget,
@@ -722,6 +776,11 @@ contract CatalystGovernanceUpgradeable is
             p.executed,
             proposalPayloads[id]
         );
+    }
+
+    // small helper to read ready time (could be used by frontend)
+    function getProposalReadyTime(bytes32 id) external view returns (uint256) {
+        return proposalReadyTime[id];
     }
 
     // -------------------------
@@ -759,26 +818,22 @@ contract CatalystGovernanceUpgradeable is
         }
     }
 
-// In any contract inheriting AccessControlUpgradeable (e.g., CataERC20Upgradeable, CatalystGovernanceUpgradeable, BatchGuardianCouncilUpgradeable.sol)
+    // In any contract inheriting AccessControlUpgradeable (e.g., CataERC20Upgradeable, CatalystGovernanceUpgradeable, BatchGuardianCouncilUpgradeable.sol)
 
-/// @dev Overrides grantRole, disabling direct external calls.
-// Parameter names are removed (e.g., 'role' and 'account') to silence compiler warnings.
-function grantRole(bytes32, address) public virtual override {
-    revert("Unauthorized: Direct role granting is disabled.");
-}
+    /// @dev Overrides grantRole, disabling direct external calls.
+    function grantRole(bytes32, address) public virtual override {
+        revert("Unauthorized: Direct role granting is disabled.");
+    }
 
-/// @dev Overrides revokeRole, disabling direct external calls.
-// Parameter names are removed to silence compiler warnings.
-function revokeRole(bytes32, address) public virtual override {
-    revert("Unauthorized: Direct role revocation is disabled.");
-}
+    /// @dev Overrides revokeRole, disabling direct external calls.
+    function revokeRole(bytes32, address) public virtual override {
+        revert("Unauthorized: Direct role revocation is disabled.");
+    }
 
-/// @dev Overrides renounceRole, preventing accounts from voluntarily relinquishing a role.
-// Parameter names are removed to silence compiler warnings.
-function renounceRole(bytes32, address) public virtual override {
-    revert("Unauthorized: Direct role renouncement is disabled.");
-}
-
+    /// @dev Overrides renounceRole, preventing accounts from voluntarily relinquishing a role.
+    function renounceRole(bytes32, address) public virtual override {
+        revert("Unauthorized: Direct role renouncement is disabled.");
+    }
 
     // -------------------------
     // UUPS
