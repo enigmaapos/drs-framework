@@ -198,6 +198,16 @@ bool isPermanent;
     uint256 public totalStakedNFTsCount;
 // shorthand (equals totalStakedAll)
 
+
+function getUserPortfolio(address collection, address user)
+    external
+    view
+    returns (uint256[] memory)
+{
+    return stakePortfolioByUser[collection][user];
+}
+
+
     // ---------- Reward config ----------
     uint256 public baseRewardRate;
 // abstract units (minted by CATA)
