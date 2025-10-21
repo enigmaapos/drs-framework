@@ -263,7 +263,7 @@ contract CatalystGovernanceUpgradeable is
         // Only allow generic proposals here.
         require(pType <= ProposalType.TIER_UPGRADE, "use specialized propose func");
 
-        (uint256 weight,) = _votingWeight(msg.sender);
+        (uint256 weight,) = _votingWeightOf(msg.sender);
         if (weight == 0) revert Ineligible();
 
         id = keccak256(
@@ -291,7 +291,7 @@ contract CatalystGovernanceUpgradeable is
     /// @notice Specialized proposer for council reseed active batch.
     function proposeCouncilReseedActive(address[7] calldata newBatch) external returns (bytes32 id) {
         if (council == address(0)) revert ZeroAddress();
-        (uint256 weight,) = _votingWeight(msg.sender);
+        (uint256 weight,) = _votingWeightOf(msg.sender);
         if (weight == 0) revert Ineligible();
 
         for (uint256 i = 0; i < 7; ++i) {
@@ -328,7 +328,7 @@ contract CatalystGovernanceUpgradeable is
     /// @notice Specialized proposer for proposing a standby batch reseed.
     function proposeCouncilReseedStandby(address[7] calldata newBatch) external returns (bytes32 id) {
         if (council == address(0)) revert ZeroAddress();
-        (uint256 weight,) = _votingWeight(msg.sender);
+        (uint256 weight,) = _votingWeightOf(msg.sender);
         if (weight == 0) revert Ineligible();
 
         for (uint256 i = 0; i < 7; ++i) {
@@ -364,7 +364,7 @@ contract CatalystGovernanceUpgradeable is
     /// @notice Specialized proposer for proposing to commit a pending standby batch.
     function proposeCouncilCommitStandby() external returns (bytes32 id) {
         if (council == address(0)) revert ZeroAddress();
-        (uint256 weight,) = _votingWeight(msg.sender);
+        (uint256 weight,) = _votingWeightOf(msg.sender);
         if (weight == 0) revert Ineligible();
 
         id = keccak256(
@@ -392,7 +392,7 @@ contract CatalystGovernanceUpgradeable is
     /// @notice Specialized proposer for proposing to activate the standby batch.
     function proposeCouncilActivateStandby() external returns (bytes32 id) {
         if (council == address(0)) revert ZeroAddress();
-        (uint256 weight,) = _votingWeight(msg.sender);
+        (uint256 weight,) = _votingWeightOf(msg.sender);
         if (weight == 0) revert Ineligible();
 
         id = keccak256(
@@ -420,7 +420,7 @@ contract CatalystGovernanceUpgradeable is
     /// @notice Specialized proposer for proposing a new DAO for the council.
     function proposeCouncilNewDAO(address newDAO) external returns (bytes32 id) {
         if (council == address(0) || newDAO == address(0)) revert ZeroAddress();
-        (uint256 weight,) = _votingWeight(msg.sender);
+        (uint256 weight,) = _votingWeightOf(msg.sender);
         if (weight == 0) revert Ineligible();
 
         bytes memory daoEncoded = abi.encode(newDAO);
@@ -450,7 +450,7 @@ contract CatalystGovernanceUpgradeable is
     /// @notice Specialized proposer for proposing to commit the new DAO.
     function proposeCouncilCommitNewDAO() external returns (bytes32 id) {
         if (council == address(0)) revert ZeroAddress();
-        (uint256 weight,) = _votingWeight(msg.sender);
+        (uint256 weight,) = _votingWeightOf(msg.sender);
         if (weight == 0) revert Ineligible();
 
         id = keccak256(
@@ -478,7 +478,7 @@ contract CatalystGovernanceUpgradeable is
     /// @notice Specialized proposer for proposing to clear a lock on the council contract.
     function proposeCouncilClearLock() external returns (bytes32 id) {
         if (council == address(0)) revert ZeroAddress();
-        (uint256 weight,) = _votingWeight(msg.sender);
+        (uint256 weight,) = _votingWeightOf(msg.sender);
         if (weight == 0) revert Ineligible();
 
         id = keccak256(
@@ -506,7 +506,7 @@ contract CatalystGovernanceUpgradeable is
     /// @notice Propose an implementation upgrade for the Council (UPGRADE_COUNCIL)
     function proposeCouncilUpgrade(address newImplementation) external returns (bytes32 id) {
         if (council == address(0) || newImplementation == address(0)) revert ZeroAddress();
-        (uint256 weight,) = _votingWeight(msg.sender);
+        (uint256 weight,) = _votingWeightOf(msg.sender);
         if (weight == 0) revert Ineligible();
 
         bytes memory implEncoded = abi.encode(newImplementation);
@@ -539,7 +539,7 @@ contract CatalystGovernanceUpgradeable is
     // Vote
     // -------------------------
     function vote(bytes32 id, address attributedCollection) external {
-        (uint256 weight, address attr) = _votingWeight(msg.sender);
+        (uint256 weight, address attr) = _votingWeightOf(msg.sender);
         if (weight == 0) revert Ineligible();
 
         Proposal storage p = proposals[id];
@@ -796,17 +796,65 @@ contract CatalystGovernanceUpgradeable is
         return abi.decode(data, (address[7]));
     }
 
-    // -------------------------
-    // Voting weight (wired to staking)
-    // -------------------------
-    function _votingWeight(address voter) internal view returns (uint256 weight, address attributedCollection) {
-        if (address(staking) == address(0)) return (0, address(0));
-        try staking.votingWeight(voter) returns (uint256 w, address a) {
-            return (w, a);
-        } catch {
-            return (0, address(0));
-        }
+    
+    // ================================================================
+// 🗳️ VOTING WEIGHT & ELIGIBILITY LOGIC
+// ================================================================
+enum CollectionTier { UNVERIFIED, VERIFIED, BLUECHIP }
+
+/// @notice Compute the user’s total voting weight across all eligible collections
+/// @dev Reads data from the linked CatalystStaking contract
+function _votingWeightOf(address user) internal view returns (uint256 weight, address mainCollection) {
+    if (address(staking) == address(0)) return (0, address(0));
+
+    uint256 totalCollections;
+    try ICatalystStaking(address(staking)).registeredCollectionsLength() returns (uint256 len) {
+        totalCollections = len;
+    } catch {
+        return (0, address(0));
     }
+
+    for (uint256 i = 0; i < totalCollections; i++) {
+        address collection;
+        try ICatalystStaking(address(staking)).registeredCollections(i) returns (address c) {
+            collection = c;
+        } catch {
+            continue;
+        }
+
+        (bool registered, uint8 tier,,,,,) = ICatalystStaking(address(staking)).collectionMeta(collection);
+        if (!registered || tier == uint8(CollectionTier.UNVERIFIED)) continue;
+
+        uint256[] memory stakes;
+        try ICatalystStaking(address(staking)).stakePortfolioByUser(collection, user) returns (uint256[] memory s) {
+            stakes = s;
+        } catch {
+            continue;
+        }
+
+        if (stakes.length == 0) continue;
+
+        uint256 multiplier = (tier == uint8(CollectionTier.BLUECHIP)) ? 3 : 1;
+        weight += stakes.length * multiplier * WEIGHT_SCALE;
+
+        if (mainCollection == address(0)) mainCollection = collection;
+    }
+
+    return (weight, mainCollection);
+}
+
+/// @notice Returns voting eligibility info for a user
+function getVotingEligibility(address user)
+    external
+    view
+    returns (uint256 weight, bool canVote, bool canPropose)
+{
+    (weight,) = _votingWeightOf(user);
+    uint256 minVote = minVotesRequiredScaled;
+    uint256 minProp = (minVotesRequiredScaled * 2) / 3; // example ratio if proposals need higher stake
+    canVote = weight >= minVote;
+    canPropose = weight >= minProp;
+}
 
     // -------------------------
     // Utility: revert with reason bytes if present
