@@ -20,8 +20,29 @@ interface IBatchGuardianCouncil {
 
 /// @notice Minimal interface for CatalystStaking (for governance weights)
 interface ICatalystStaking {
-    /// @dev returns (weightScaled, attributedCollection)
+    // existing function
     function votingWeight(address user) external view returns (uint256 weight, address attributedCollection);
+
+    // newly added functions used by _votingWeightOf()
+    function registeredCollectionsLength() external view returns (uint256);
+    function registeredCollections(uint256 index) external view returns (address);
+    function collectionMeta(address collection)
+        external
+        view
+        returns (
+            bool registered,
+            uint8 tier,
+            uint256 stakedCount,
+            uint256 totalStakers,
+            uint256 totalVolume,
+            uint256 emissionRate,
+            uint256 creationTime,
+            address creator
+        );
+    function stakePortfolioByUser(address collection, address user)
+        external
+        view
+        returns (uint256[] memory tokenIds);
 }
 
 /// @title Catalyst Governance (Upgradeable) with Council Reseed + Real Voting Weight
