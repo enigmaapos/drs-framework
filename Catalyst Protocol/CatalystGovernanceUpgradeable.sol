@@ -824,10 +824,12 @@ contract CatalystGovernanceUpgradeable is
 enum CollectionTier { UNVERIFIED, VERIFIED, BLUECHIP }
 
 /// @notice Compute the user’s total voting weight across all eligible collections
-/// @dev Reads data from the linked CatalystStaking contract
-function _votingWeightOf(address user) internal view returns (uint256 weight, address mainCollection) {
-    if (address(staking) == address(0)) return (0, address(0));
-
+/// @dev Reads data from the linked CatalystStakingUpgradeable contract
+function _votingWeightOf(address user)
+    internal
+    view
+    returns (uint256 weight, address mainCollection)
+{
     uint256 totalCollections;
     try ICatalystStaking(address(staking)).registeredCollectionsLength() returns (uint256 len) {
         totalCollections = len;
@@ -843,9 +845,11 @@ function _votingWeightOf(address user) internal view returns (uint256 weight, ad
             continue;
         }
 
-        (bool registered, uint8 tier,,,,,) = ICatalystStaking(address(staking)).collectionMeta(collection);
-        if (!registered || tier == uint8(CollectionTier.UNVERIFIED)) continue;
+        // read collection metadata (registered, tier, etc.)
+        (bool registered, uint8 tier,,,,,,) = ICatalystStaking(address(staking)).collectionMeta(collection);
+        if (!registered || tier == uint8(CollectionTier.UNVERIFIED)) continue; // skip unverified collections
 
+        // get user’s staked NFTs
         uint256[] memory stakes;
         try ICatalystStaking(address(staking)).stakePortfolioByUser(collection, user) returns (uint256[] memory s) {
             stakes = s;
@@ -855,8 +859,9 @@ function _votingWeightOf(address user) internal view returns (uint256 weight, ad
 
         if (stakes.length == 0) continue;
 
+        // assign multiplier based on collection tier
         uint256 multiplier = (tier == uint8(CollectionTier.BLUECHIP)) ? 3 : 1;
-        weight += stakes.length * multiplier * WEIGHT_SCALE;
+        weight += stakes.length * multiplier * 1e18;
 
         if (mainCollection == address(0)) mainCollection = collection;
     }
