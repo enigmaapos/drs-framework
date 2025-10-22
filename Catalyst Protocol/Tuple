@@ -31,3 +31,30 @@ tuple for proxy deployment for governance contract
     1000000000000000000000,                      // minVotes = 1000 * 1e18
     30                                           // capPercent = 30%
 )
+
+
+tuple example and meaning of deployer recovery contract 
+[
+  "0x1234567890abcdef1234567890abcdef12345678", // target_ (your staking contract)
+  "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd", // manager_ (DAO / deployer)
+  [ // guardianSet (7 guardians)
+    "0x1111111111111111111111111111111111111111",
+    "0x2222222222222222222222222222222222222222",
+    "0x3333333333333333333333333333333333333333",
+    "0x4444444444444444444444444444444444444444",
+    "0x5555555555555555555555555555555555555555",
+    "0x6666666666666666666666666666666666666666",
+    "0x7777777777777777777777777777777777777777"
+  ],
+  [ // standbySet (new guardians after lock)
+    "0x8888888888888888888888888888888888888888",
+    "0x9999999999999999999999999999999999999999",
+    "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "0xcccccccccccccccccccccccccccccccccccccccc",
+    "0xdddddddddddddddddddddddddddddddddddddddd",
+    "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  ],
+  5,         // threshold_ (5 out of 7 approvals required)
+  86400      // recoveryWindowSecs (24 hours)
+]
