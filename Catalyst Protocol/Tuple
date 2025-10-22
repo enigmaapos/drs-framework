@@ -20,6 +20,8 @@ proxy ca - 0xa8Dd5EeEcF6eCc4Ff8A06881125ae95C0f777332
 
 bonus extension ca - 0x3d03aE5EE514BBc80f2b6171a890aC67F546b572
 
+deployer recovery ca - 0x1606d1F1B67246c664A9758B3Da3B0d95F5a4DA8
+
 remix ide deploy proxy ca guardian council - 0xB57ee0797C3fc0205714a577c02F7205bB89dF30
 
 
